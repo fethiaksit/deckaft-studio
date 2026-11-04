@@ -3,6 +3,7 @@ import {
   PenTool,
   Ruler,
   Scan,
+  Move,
   Hand,
   Undo2,
   Redo2,
@@ -11,104 +12,108 @@ import {
   Plus,
   Minus,
   Focus,
+  Check,
 } from "lucide-react-native";
 import { IconButton, Label } from "../../../components/ui";
-import type { DrawingTool } from "../model";
 import { useTheme } from "../../../core/theme/theme";
+import type { DrawingWorkspace } from "../hooks/useDrawingWorkspace";
 export function DrawingToolbar({
-  tool,
-  setTool,
-  canUndo,
-  canRedo,
-  onUndo,
-  onRedo,
-  grid,
-  toggleGrid,
-  selected,
-  onDelete,
-  onZoom,
-  onReset,
+  workspace: w,
+  vertical = false,
 }: {
-  tool: DrawingTool;
-  setTool: (t: DrawingTool) => void;
-  canUndo: boolean;
-  canRedo: boolean;
-  onUndo: () => void;
-  onRedo: () => void;
-  grid: boolean;
-  toggleGrid: () => void;
-  selected: boolean;
-  onDelete: () => void;
-  onZoom: (factor: number) => void;
-  onReset: () => void;
+  workspace: DrawingWorkspace;
+  vertical?: boolean;
 }) {
   const { colors } = useTheme();
   return (
     <ScrollView
-      horizontal
+      horizontal={!vertical}
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ alignItems: "center", padding: 8, gap: 5 }}
-      style={{ flexGrow: 0, backgroundColor: colors.surface }}
+      showsVerticalScrollIndicator={false}
+      style={{
+        flexGrow: 0,
+        backgroundColor: colors.surface,
+        width: vertical ? 64 : undefined,
+      }}
+      contentContainerStyle={{ padding: 8, gap: 5, alignItems: "center" }}
     >
       {(
         [
-          { id: "draw", title: "Çizgi", icon: PenTool },
-          { id: "measure", title: "Ölçü", icon: Ruler },
-          { id: "select", title: "Alan seçimi", icon: Scan },
-          { id: "pan", title: "Kaydır", icon: Hand },
+          { id: "draw", label: "Çizgi", icon: PenTool },
+          { id: "measure", label: "Ölçü", icon: Ruler },
+          { id: "select", label: "Seç", icon: Scan },
+          { id: "move", label: "Taşı", icon: Move },
+          { id: "pan", label: "Kaydır", icon: Hand },
         ] as const
-      ).map(({ id, title, icon }) => (
-        <View key={id} style={{ alignItems: "center" }}>
+      ).map((t) => (
+        <View key={t.id} style={{ alignItems: "center" }}>
           <IconButton
-            icon={icon}
-            label={title}
-            active={tool === id}
-            onPress={() => setTool(id)}
+            icon={t.icon}
+            label={t.label}
+            active={w.tool === t.id}
+            disabled={w.saving}
+            onPress={() => w.changeTool(t.id)}
           />
           <Label muted style={{ fontSize: 9 }}>
-            {title}
+            {t.label}
           </Label>
         </View>
       ))}
       <View
         style={{
-          width: 1,
-          height: 30,
+          width: vertical ? 30 : 1,
+          height: vertical ? 1 : 30,
           backgroundColor: colors.border,
-          marginHorizontal: 3,
+          margin: 4,
         }}
+      />
+      <IconButton
+        icon={Check}
+        label="Alanı kapat"
+        disabled={
+          w.saving ||
+          !w.activePath ||
+          w.activePath.closed ||
+          w.activePath.points.length < 3
+        }
+        onPress={w.close}
       />
       <IconButton
         icon={Undo2}
         label="Geri al"
-        disabled={!canUndo}
-        onPress={onUndo}
+        disabled={w.saving || !w.history.past.length}
+        onPress={() => w.historyStep("undo")}
       />
       <IconButton
         icon={Redo2}
         label="İleri al"
-        disabled={!canRedo}
-        onPress={onRedo}
+        disabled={w.saving || !w.history.future.length}
+        onPress={() => w.historyStep("redo")}
       />
       <IconButton
         icon={Trash2}
-        label="Seçimi sil"
-        disabled={!selected}
-        onPress={onDelete}
+        label="Seçili alanı veya ölçüyü sil"
+        disabled={w.saving || !w.selection}
+        onPress={w.remove}
       />
       <IconButton
         icon={Grid2X2}
-        label="Izgarayı aç veya kapat"
-        active={grid}
-        onPress={toggleGrid}
+        label="Izgara görünürlüğü"
+        active={w.document.layers.grid}
+        disabled={w.saving}
+        onPress={() =>
+          w.updateSettings({
+            layers: { ...w.document.layers, grid: !w.document.layers.grid },
+          })
+        }
       />
-      <IconButton icon={Minus} label="Uzaklaştır" onPress={() => onZoom(0.8)} />
+      <IconButton icon={Minus} label="Uzaklaştır" onPress={() => w.zoom(0.8)} />
       <IconButton
         icon={Plus}
         label="Yakınlaştır"
-        onPress={() => onZoom(1.25)}
+        onPress={() => w.zoom(1.25)}
       />
-      <IconButton icon={Focus} label="Görünümü sıfırla" onPress={onReset} />
+      <IconButton icon={Focus} label="Çizimi ortala" onPress={w.fit} />
     </ScrollView>
   );
 }

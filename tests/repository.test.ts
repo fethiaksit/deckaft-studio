@@ -78,3 +78,79 @@ test("invalid input and editing a deleted project never create rows", async () =
     sqlite.close();
   }
 });
+
+test("legacy drawing upgrades on read and v2 geometry/layers survive SQLite reopen unchanged", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "deckaft-v2-"));
+  const file = join(dir, "studio.sqlite");
+  let c = connect(file);
+  try {
+    await c.repo.init();
+    const project = await c.repo.save(input);
+    const legacy = {
+      version: 1,
+      unit: "mm",
+      paths: [
+        {
+          id: "old",
+          points: [
+            { x: 0, y: 0 },
+            { x: 10000, y: 0 },
+            { x: 10000, y: 10000 },
+            { x: 0, y: 10000 },
+            { x: 0, y: 0 },
+          ],
+        },
+      ],
+      dimensions: [],
+    };
+    const raw = JSON.stringify(legacy);
+    c.sqlite
+      .prepare("INSERT INTO drawings VALUES (?,?,?)")
+      .run(project.id, raw, "2026-01-01");
+    const upgraded = await c.repo.getDrawing(project.id);
+    assert.equal(upgraded.version, 2);
+    assert.equal(upgraded.paths[0]?.closed, true);
+    assert.equal(
+      c.sqlite.prepare("SELECT document FROM drawings").get()?.document,
+      raw,
+    );
+    const { drawingArea, startRegion, closeRegion } =
+      await import("../src/modules/drawing/operations");
+    let doc = startRegion(upgraded, "pool", "void", "Balkon", "Balkon");
+    for (const point of [
+      { x: 1000, y: 1000 },
+      { x: 3000, y: 1000 },
+      { x: 3000, y: 3000 },
+      { x: 1000, y: 3000 },
+    ])
+      doc = appendPoint(doc, "pool", point);
+    doc = closeRegion(doc, "pool");
+    doc = {
+      ...doc,
+      layers: { outer: false, voids: true, dimensions: false, grid: false },
+      snap: { grid: true, axes: false, vertices: true, gridMm: 250 },
+    };
+    assert.equal(drawingArea(doc).netM2, 96);
+    await c.repo.saveDrawing(project.id, doc);
+    c.sqlite.close();
+    c = connect(file);
+    await c.repo.init();
+    const reopened = await c.repo.getDrawing(project.id);
+    assert.deepEqual(reopened, doc);
+    assert.equal(drawingArea(reopened).netM2, 96);
+    assert.equal((await c.repo.list()).length, 1);
+    assert.ok(
+      c.sqlite.prepare("SELECT updatedAt FROM drawings").get()?.updatedAt,
+    );
+    await assert.rejects(
+      c.repo.saveDrawing(project.id, {
+        ...doc,
+        snap: { ...doc.snap, gridMm: NaN },
+      }),
+    );
+    assert.deepEqual(await c.repo.getDrawing(project.id), doc);
+  } finally {
+    c.sqlite.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

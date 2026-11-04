@@ -82,10 +82,10 @@ export default function SettingsScreen() {
       </Card>
       <Card>
         <Label style={{ fontWeight: "700" }}>DeckAft Studio</Label>
-        <Label muted>0.1.0 · FAZ 00</Label>
+        <Label muted>0.2.0 · FAZ 01</Label>
         <Label muted>
-          Proje yönetimi ve çizim altyapısı. Karkas, kesim optimizasyonu, parsel
-          sorgulama ve PDF modülleri hazırlık aşamasında.
+          Proje yönetimi, ölçülü çizim ve net alan hesabı. Karkas, kesim
+          optimizasyonu, parsel sorgulama ve PDF modülleri hazırlık aşamasında.
         </Label>
       </Card>
     </Page>

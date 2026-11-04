@@ -1,85 +1,67 @@
-# DeckAft Studio · FAZ 00
+# DeckAft Studio · FAZ 01
 
-Profesyonel deck, teras ve pergola projeleri için iOS / Android uygulama temeli. FAZ 01 hesaplama algoritmaları bu sürüme dahil değildir.
+React Native + Expo uygulaması: yerel proje yönetimi, gerçek ölçülü teknik alan çizimi ve net deck m² hesabı. FAZ 00 altyapısı korunur; karkas/kesim/PDF motorları bu fazda eklenmedi.
 
-## Kurulum
+## Kurulum ve çalıştırma
 
-Node.js 26 ve npm ile doğrulandı. Kilit dosyası depoya dahildir.
+Node 26 ve npm ile doğrulandı. Testlerde `node:sqlite` kullanılır.
 
 ```sh
 cd /Volumes/KIOXIA/deckaft-studio
 npm ci
 npm start
+npm run ios       # Xcode + iOS Simulator
+npm run android   # Android SDK + çalışan emülatör veya bağlı cihaz
 ```
 
+SDK 58 uyumlu Expo Go veya native geliştirme derlemesi gerekir. Başka Metro çalışıyorsa `npx expo start --port 8082` kullanabilirsiniz. Web desteği bu teslimin kapsamı değildir.
+
+## Kullanım
+
+1. Projeler'den bir proje oluşturun veya mevcut projenin çizimini açın.
+2. Çizgi aracında köşelere dokunun. İlk köşeye dönün veya ✓ ile sınırı kapatın. Hassas mm girişini özellik panelinden kullanabilirsiniz.
+3. Seç aracıyla bir kenara dokunun. Uzunluğu mm/cm/m cinsinden girin; sabit kalacak başlangıç veya bitiş köşesini açıkça seçip uygulayın. `250 cm`, `3,75 m` ve `1250 mm` desteklenir. Kenarın yönü korunur, diğer ucu gerçekten taşınır. Komşu kenarların yeni ölçüleri yeniden hesaplanır; önceki girilen uzunluklar kalıcı kilit değildir. Çakışma veya dışarı taşma oluşturan işlem bütünüyle reddedilir.
+4. Taşı aracıyla köşeyi sürükleyin veya köşeye dokunarak X/Y değerlerini girin. Sürükleme tek geri alma adımıdır; geçersiz sonuçta eski geometri korunur. Yakındaki köşeyle birleştirme paneldedir.
+5. Özelliklerden Ev, Balkon, Havuz, Merdiven, Kolon, Kabin veya Özel boşluk oluşturun, adlandırın ve kapatın. Birden fazla boşluk çakışabilir; yalnız birleşim alanları çıkarılır. Dış sınırdan taşan boşluk kabul edilmez.
+6. Kaydet ile çizimi SQLite'a yazın. Yeniden açıldığında aynı mm koordinatları, ölçüler, katmanlar ve yakalama ayarları okunur.
+
+Telefon: tam çalışma alanı, yatay kaydırılabilen alt araçlar ve gizlenebilir alt özellik paneli. Kenar seçimi özellik panelini açar. Tablet: solda araçlar, sağda özellikler. Yatay telefonlar tablet sayılmaz. İki parmak yakınlaştırır/kaydırır; Kaydır aracında tek parmakla pan yapılır. Çizimi ortala bütün geometriyi mevcut tuvale sığdırır; kayıt açılışında da başlangıç görünümü ortalanır.
+
+Dış sınır, boşluklar, ölçüler ve ızgara/yardımcılar ayrı katmanlardır. Görünürlük alan hesabını değiştirmez. Gizli geometri seçime ve köşe yakalamaya katılmaz. Izgara görüntüsü okunabilirlik için yakalama aralığının katlarını gösterebilir. Köşe/yatay/dikey/ızgara yakalama toleransı ölçekten bağımsız 12 ekran pikselidir. Elle girilmiş koordinata yakalama uygulanmaz.
+
+Açık veya geçersiz bir dış sınır/boşlukta kesin alan gösterilmez. Brüt/hariç/net m² ve dış çevre metre olarak, sonuçlar iki ondalıkla gösterilir. Dahili geometride erken yuvarlama yapılmaz. Serbest çizgiler alan hesabına katılmaz; alan rolünü panelden değiştirebilirsiniz. Referans ölçü çizgileri bağımsızdır; geometriye bağlı kenar etiketi her zaman gerçek koordinattan hesaplanır.
+
+## Veri ve mimari
+
+- `src/modules/geometry/engine.ts`: poligon doğrulama, shoelace alan/çevre, boşluk birleşimi ve kontrollü kenar değişimi.
+- `src/modules/geometry/interaction.ts`: birim ayrıştırma, yakalama, hit mesafesi ve viewport ortalama.
+- `src/modules/drawing/model.ts`: sürüm 2 belge; dış alan/boşluk/serbest çizgi, ölçüler, katman/yakalama ayarları.
+- `src/modules/drawing/operations.ts`: kapatma, köşe taşıma/birleştirme, kenar düzenleme, seçim/silme; atomik geometri kontrolü.
+- `src/modules/drawing/hooks/useDrawingWorkspace.ts`: yükleme/kayıt, seçim, etkileşim, drag oturumu ve undo/redo koordinasyonu.
+- `src/modules/drawing/components/`: Skia tuvali, araçlar, alan özeti ve özellikler.
+- `src/core/db/`: mevcut SQLite şeması ve repository; `updatedAt` mevcut çizim satırında tutulur.
+- Router, Zustand, API istemcisi ve proje CRUD akışları FAZ 00 yapısındadır.
+
+Koordinatlar mm, alan hesabı mm²→m², çevre mm→m'dir. [polygon-clipping](https://github.com/mfogel/polygon-clipping) 0.15.7 yalnız birleşim/fark işlemleri için eklendi. Geçersiz poligonlar kütüphaneye verilmeden doğrulanır; dışarı taşan boşluk sessizce kırpılmaz.
+
+SQLite tabloları değişmediği için `user_version=1` korunur. Eski `version:1` JSON okuyucuda `version:2`'ye dönüştürülür; ilk çizgi dış sınır, ek çizgiler serbest çizgi olarak korunur. Yalnız açıkça tekrarlanan ilk/son nokta varsa kapalı sınır tanınır ve son mükerrer koordinat temsilden kaldırılır. Okuma eski kaydı değiştirmez; kullanıcı kaydettiğinde yeni belge yazılır. Alan geometrisi hatalıysa düzeltilebilmesi için veri taslak olarak okunabilir/saklanabilir; hesap sonucu verilmez. Gelecek Go servisi aynı sürümlü mm JSON sözleşmesini kullanabilir.
+
+## Testler
+
 ```sh
-npm run ios        # Xcode ve kurulmuş iOS Simulator gerekir
-npm run android    # Android SDK + çalışan emulator veya bağlı cihaz gerekir
-```
-
-Fiziksel cihaz için SDK 58 ile uyumlu Expo Go kullanın veya geliştirme derlemesi oluşturun. Expo Go eski SDK sürümündeyse güncellenmelidir. Xcode'un yeni sürümlerindeki DeviceHub penceresiyle CLI'nin Simulator adı farklı olabilir; CLI cihazı açsa bile pencere otomatik açılmayabilir. Native proje gerektiğinde `npx expo prebuild` ile üretilir; iOS/Android dizinleri üretilmiş dosyalardır.
-
-Bu faz iOS ve Android hedefler. Web için SQLite WASM ve Skia CanvasKit kurulumu yapılmadı; web desteği tamamlanmış olarak sunulmaz.
-
-## Doğrulama
-
-```sh
-npm run typecheck
-npm test
+npm run check          # TypeScript + tüm domain ve UI testleri
+npm run test:unit      # Node test runner + gerçek SQLite + geometri
+npm run test:ui        # Jest Expo + React Native Testing Library
 npm run format:check
 npx expo install --check
 npx expo-doctor
 npm run export:native
 ```
 
-Testler Node'un gerçek `node:sqlite` motoruyla repository sorgularını çalıştırır. Geçici dosya kapatılıp yeniden açılır; proje/çizim kalıcılığı, SQL parametreleri, düzenleme, silme ve foreign key cascade denetlenir. Native Expo SQLite bağlayıcısının cihaz doğrulaması ayrı değerlendirilir. API testi geçici bir yerel HTTP sunucusuyla çalışır; dış servise bağlanmaz.
+UI testleri gerçek editör hook'u ve gerçek SQLite repository'siyle çalışır. GPU/Skia olay sınırı ve Router ortamı testte uyarlanır; bunlar fiziksel cihaz/pinch/Pencil testinin yerine geçmez. Sonuç ve cihaz sınırlamaları: [FAZ01-VERIFICATION.md](docs/FAZ01-VERIFICATION.md). Değişen dosyalar: [FAZ01-CHANGES.md](docs/FAZ01-CHANGES.md).
 
-Güncel test kapsamı ve cihazda gözlenen sonuçlar: [docs/VERIFICATION.md](docs/VERIFICATION.md).
+## Sınırlar
 
-## Çalışan akışlar
+JavaScript çift duyarlıklı sayılar kullanılır; koordinat sınırı eksen başına ±100 km'dir. Çok yakın kollinear geometriler sonlu sayı duyarlılığına tabidir. Ölçü kilidi/kısıt çözücü, otomatik karkas, fire optimizasyonu, parsel API ve PDF bu fazda yoktur. Fiziksel Pencil basıncı/eğimi ve serbest el mürekkebi eklenmedi; köşe girişi/taşıma temelidir. Otomatik kayıt yoktur; kaydedilmemiş değişikliklerle çıkışta onay istenir. Uygulama zorla kapatılırsa kaydedilmemiş düzenlemeler kaybolabilir.
 
-- Dört sekme: Ana Sayfa, Projeler, Çizim, Ayarlar.
-- Proje adı, isteğe bağlı müşteri, il/ilçe, açıklama ve proje türü ile oluşturma; listeleme, arama, düzenleme, onayla silme.
-- SQLite'a gerçek kayıt; proje silindiğinde bağlı çizimi de silinir.
-- Koyu, açık ve sistem teması; tercih SQLite'ta kalıcıdır.
-- Skia çizim alanı: noktalara dokunarak çok parçalı çizgi, ayrı yeni çizgi, iki noktalı ölçü, çizgi/ölçü seçme ve silme, geri/ileri, ızgara aç/kapat, zoom, pan, görünümü sıfırlama ve kaydetme.
-- X/Y alanlarıyla milimetre cinsinden hassas nokta girişi; negatif koordinatlar desteklenir. Ondalıklar en yakın mm'ye yuvarlanır. Model sınırı her eksende ±100 km'dir.
-- Çizgiye devam etmek için Çizgi aracında dokunun. Ayrı çizgi başlatmak için panelde Yeni çizgi kullanın. Ölçü aracında başlangıç ve bitiş noktalarına dokunun. Alan seçimi aracı çizgi veya ölçü seçer; m² hesabı yapmaz.
-- Kaydet düğmesi çizimi projeye bağlar. Kaydedilmemiş değişikliklerle çıkışta onay istenir. Kayıt hatasında çizim ekranda korunur. Otomatik kayıt veya uygulamanın zorla kapatılması sonrası kaydedilmemiş çizim kurtarma bu fazda yoktur.
-- Telefonda alt araç çubuğu ve açılır proje/koordinat paneli; tablette eşzamanlı yan panel. Yatay telefon tablet sayılmaz; küçük iPad'ler tablet yerleşimi alır. Dar bölünmüş pencereler kompakt yerleşime geçer.
-
-## Mimari
-
-```text
-app/                         Expo Router rotaları ve sekmeler
-src/components/              Tema uyumlu ortak UI ve proje kartı
-src/core/config.ts           Uygulama ve modül tanımları
-src/core/db/                 SQLite şeması, repository, başlangıç/hata yönetimi
-src/core/store/              Zustand proje listesi ve görünüm tercihi
-src/core/theme/              Açık/koyu palet ve responsive karar
-src/core/api/                İleride Go backend için isteğe bağlı HTTP istemcisi
-src/modules/projects/       Proje modeli ve girdi doğrulama
-src/modules/geometry/       Milimetre koordinat ve poligon sözleşmeleri
-src/modules/drawing/        Sürümlü çizim modeli, viewport dönüşümü, editör geçmişi, Skia
-src/modules/framing/        Karkas planı veri modelleri
-src/modules/cutting/        Kesim planı veri modelleri
-src/modules/materials/      Malzeme/profil veri modelleri
-src/modules/maps/           Parsel ve coğrafi koordinat veri modelleri
-src/modules/exports/        PDF istek/çıktı veri modelleri
-src/screens/                Ekranların uygulama akışları
-tests/                      SQLite, domain, API, responsive ve editör testleri
-```
-
-Tam dosya envanteri: [docs/FILES.md](docs/FILES.md).
-
-Model koordinatları mm'dir; yalnızca `Viewport` ekranın mantıksal piksel koordinatlarını tutar. Zoom/pan modeldeki mm verilerini değiştirmez. Ölçü uzunluğu basit iki nokta mesafesidir; alan, karkas veya fire optimizasyonu değildir. Çizim JSON'u `version: 1, unit: 'mm'` sözleşmesiyle doğrulanır; okunamayan veri boş çizimle sessizce değiştirilmez. Geçmiş son 100 düzenlemeyi oturum içinde tutar.
-
-Şema sürümü 1: `projects`, `drawings`, `settings`. Bağlantıda foreign key ve WAL etkinleştirilir. İleri sürüm veritabanı tespit edilirse açılış reddedilir. Sonraki şema değişiklikleri sürümlü migration gerektirir.
-
-İsteğe bağlı backend adresi `.env.local` içinde `EXPO_PUBLIC_API_URL=https://...` olarak tanımlanabilir. EXPO_PUBLIC değerleri gizli bilgi değildir. Adres yoksa istemci istek göndermez. Kimlik doğrulama, Go servisi ve PostGIS bu fazda uygulanmadı.
-
-Harici diskte macOS'un oluşturduğu AppleDouble (`._*`) dosyaları Git ve Metro tarafından dışlanır. Bu filtre, metadata dosyalarının Expo Router rotası sanılmasını engeller.
-
-## Hazırlık modülleri
-
-Ada/parsel, karkas, malzeme/kesim ve PDF ekranları açıkça hazırlık durumunu gösterir. Hesaplama, sorgu, PDF indirme veya sahte proje sonucu üretmezler. Kullanıcı alanı yerel çalışma alanı ayarlarını açar; hesap sistemi sunmaz. Bildirim simgesi bu sürümün bildirim durumunu gösterir; push bildirim altyapısı yoktur.
+Harici diskin `._*` AppleDouble dosyaları Metro ve Git tarafından dışlanır. Jest için aynı dışlama ve Lucide'ın CJS test eşlemesi bulunur.

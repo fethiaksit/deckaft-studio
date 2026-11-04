@@ -1,0 +1,11 @@
+# FAZ01 pure geometry verification
+
+Implemented `engine.ts` and `interaction.ts`; no UI/model changes.
+
+Test-first evidence: initial scoped run failed because both modules were absent. Final command `npx tsx --test tests/geometry.test.ts tests/geometry-interaction.test.ts` passes 7 tests. Prettier checks pass for all four owned source/test files. A project typecheck after implementation reported only concurrent drawing-v2 work (missing operations/model properties), with no errors in the owned files.
+
+Coverage: 10m square = 100m², 2m hole = 96m² net, concave L = 64m²; separate holes = 92m²; overlapping holes = 94m²; nested holes = 84m²; boundary-aligned holes; outer perimeter 40m; open/self-crossing/touching/duplicate/zero-area/nonfinite/out-of-range geometry; concave notch crossing; negative and large translated coordinates; winding independence; fixed-endpoint resizing with net recalculation, immutability and rejection of invalid edits; metric parsing; zoom-independent nearest-vertex snapping, axes/grid threshold; segment distance; viewport centering and scale clamps.
+
+Numeric behavior: coordinates restricted to ±1e8 mm, editable lengths to 2e8 mm. JavaScript double precision, translated-origin shoelace, no output rounding. Fractional square area asserted within 1e-12 m². Segment orientation and zero-area checks use exact floating-point zero; outside-hole difference is rejected for any positive computed area, without a tolerance that could silently accept exterior material. polygon-clipping 0.15.7 handles boolean geometry. Extremely near-collinear input remains subject to double-precision limits; no claim of arbitrary-precision predicates.
+
+Self-review: adjacency overlap detection rejects backtracking; nonadjacent segment intersection includes touching and duplicated vertices. Full hole difference against the concave outer prevents vertex-only containment errors. Hole union prevents nested/overlap double counting. Invalid/incomplete geometry yields null for every reported numeric field. Perimeter is the outer boundary only. Grid snapping uses Euclidean distance, axes tie chooses horizontal, nearest vertex wins over both. Fit honors [.005,2] clamp; extremely large geometry can exceed the available viewport at minimum scale.

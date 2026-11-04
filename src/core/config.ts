@@ -1,6 +1,6 @@
 export const APP = {
   name: "DeckAft Studio",
-  phase: "FAZ 00",
+  phase: "FAZ 01",
   database: "deckaft-studio.db",
   contentMaxWidth: 1120,
   minTouchSize: 44,

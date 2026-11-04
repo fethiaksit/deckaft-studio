@@ -48,3 +48,17 @@ test("redo preserves active path; explicit new line starts a separate one", () =
   });
   assert.equal(editor.history.present.paths.length, 2);
 });
+
+test("undo reconciles an active region removed from document history", async () => {
+  const { startRegion } = await import("../src/modules/drawing/operations");
+  const doc = appendPoint(emptyDrawing(), "outer", { x: 0, y: 0 });
+  let e = createEditor(doc, "outer");
+  e = editorReducer(e, {
+    type: "document",
+    document: startRegion(doc, "new", "draft", "Yeni"),
+  });
+  e = editorReducer(e, { type: "newPath", id: "new" });
+  e = editorReducer(e, { type: "undo" });
+  assert.equal(e.pathId, "outer");
+  assert.ok(e.history.present.paths.some((p) => p.id === e.pathId));
+});
