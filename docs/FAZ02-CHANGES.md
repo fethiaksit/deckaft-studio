@@ -1,0 +1,44 @@
+# FAZ 02 değişen dosyalar
+
+Başlangıç 807545c · Dal feat/faz02-auto-framing.
+
+- `README.md`
+- `app.json`
+- `app/_layout.tsx`
+- `app/framing/[id].tsx`
+- `docs/FAZ02-CHANGES.md`
+- `docs/FAZ02-ENGINE-REPORT.md`
+- `docs/FAZ02-PROGRESS.md`
+- `docs/FAZ02-VERIFICATION.md`
+- `docs/screenshots/faz02-iphone.png`
+- `docs/superpowers/plans/2026-11-05-faz02.md`
+- `docs/superpowers/specs/2026-11-05-faz02-request.md`
+- `package-lock.json`
+- `package.json`
+- `src/core/config.ts`
+- `src/core/db/repository.ts`
+- `src/core/db/schema.ts`
+- `src/modules/framing/components/FramingCanvas.tsx`
+- `src/modules/framing/components/FramingProperties.tsx`
+- `src/modules/framing/components/FramingSettingsPanel.tsx`
+- `src/modules/framing/components/FramingToolbar.tsx`
+- `src/modules/framing/config.ts`
+- `src/modules/framing/engine.ts`
+- `src/modules/framing/form.ts`
+- `src/modules/framing/geometry.ts`
+- `src/modules/framing/hooks/useFramingWorkspace.ts`
+- `src/modules/framing/model.ts`
+- `src/modules/framing/operations.ts`
+- `src/modules/framing/persistence.ts`
+- `src/modules/framing/validation.ts`
+- `src/screens/DrawingScreen.tsx`
+- `src/screens/FramingScreen.tsx`
+- `src/screens/HomeScreen.tsx`
+- `src/screens/ModuleScreen.tsx`
+- `src/screens/ProjectFormScreen.tsx`
+- `src/screens/ProjectsScreen.tsx`
+- `src/screens/SettingsScreen.tsx`
+- `tests/framing-engine.test.ts`
+- `tests/framing-operations.test.ts`
+- `tests/framing-repository.test.ts`
+- `tests/framing-workspace.ui.test.tsx`

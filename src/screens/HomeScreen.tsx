@@ -229,7 +229,7 @@ export default function HomeScreen() {
                   key={t.id}
                   icon={t.icon}
                   title={t.title}
-                  badge="HAZIRLIK"
+                  badge={t.id === "framing" ? "2 KATMAN" : "HAZIRLIK"}
                   onPress={() =>
                     router.push({
                       pathname: "/module/[id]",
@@ -264,7 +264,7 @@ export default function HomeScreen() {
                     >
                       <Icon size={18} color={colors.accent} />
                       <Label muted style={{ fontSize: 8, letterSpacing: 0.5 }}>
-                        HAZIRLIK
+                        {id === "framing" ? "2 KATMAN" : "HAZIRLIK"}
                       </Label>
                     </View>
                     <Label

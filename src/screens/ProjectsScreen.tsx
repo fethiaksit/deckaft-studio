@@ -9,8 +9,10 @@ import { useRepository } from "../core/db/provider";
 import { useResponsive } from "../core/theme/theme";
 export default function ProjectsScreen({
   drawing = false,
+  framing = false,
 }: {
   drawing?: boolean;
+  framing?: boolean;
 }) {
   const repo = useRepository();
   const { tablet } = useResponsive();
@@ -28,11 +30,19 @@ export default function ProjectsScreen({
   );
   return (
     <Page
-      title={drawing ? "Çizim çalışma alanı" : "Projelerim"}
+      title={
+        framing
+          ? "Karkas planları"
+          : drawing
+            ? "Çizim çalışma alanı"
+            : "Projelerim"
+      }
       subtitle={
-        drawing
-          ? "Çizimine devam etmek için bir proje seçin."
-          : `${projects.length} proje · Bu cihazda saklanıyor`
+        framing
+          ? "Karkas oluşturmak veya açmak için proje seçin."
+          : drawing
+            ? "Çizimine devam etmek için bir proje seçin."
+            : `${projects.length} proje · Bu cihazda saklanıyor`
       }
       action={
         <Button
@@ -80,6 +90,18 @@ export default function ProjectsScreen({
           {visible.map((p) => (
             <View key={p.id} style={{ width: tablet ? "48%" : "100%", gap: 8 }}>
               <ProjectCard project={p} />
+              {framing && (
+                <Button
+                  title={`${p.name} · Karkas planı`}
+                  variant="secondary"
+                  onPress={() =>
+                    router.push({
+                      pathname: "/framing/[id]",
+                      params: { id: p.id },
+                    })
+                  }
+                />
+              )}
               {drawing && (
                 <Button
                   title={`${p.name} · Çizimi aç`}

@@ -1,6 +1,6 @@
-# DeckAft Studio · FAZ 01
+# DeckAft Studio · FAZ 02
 
-React Native + Expo uygulaması: yerel proje yönetimi, gerçek ölçülü teknik alan çizimi ve net deck m² hesabı. FAZ 00 altyapısı korunur; karkas/kesim/PDF motorları bu fazda eklenmedi.
+React Native + Expo uygulaması: yerel proje yönetimi, gerçek ölçülü teknik alan çizimi ve net deck m² hesabı. FAZ 00/01 korunur; iki katmanlı karkas ön yerleşimi eklendi. Kesim/PDF motorları bu fazda eklenmedi.
 
 ## Kurulum ve çalıştırma
 
@@ -16,7 +16,29 @@ npm run android   # Android SDK + çalışan emülatör veya bağlı cihaz
 
 SDK 58 uyumlu Expo Go veya native geliştirme derlemesi gerekir. Başka Metro çalışıyorsa `npx expo start --port 8082` kullanabilirsiniz. Web desteği bu teslimin kapsamı değildir.
 
-## Kullanım
+## FAZ 02 — Karkas planı
+
+Ana sayfadaki Karkas Planı'ndan proje seçin veya kayıtlı çizim/proje detayından Karkas planını aç kullanın. Çizimin kapalı ve geçerli olması gerekir. Karkas Oluştur, ayrı kotlarda üst/alt profil nesneleri üretir; kesişimler hatları kesmez.
+
+- Yatay deck → dikey üst / yatay alt; dikey deck yönünde eksenler değişir.
+- Deck boyu 3000 mm, stok 6000 mm, üst maksimum aks 300 mm, kerf 3 mm. Kesit başlangıcı 40×60×2 mm yalnız örnektir; güvenli kesit önerisi değildir.
+- Alt karkas ve ayak/mesnet aralığı başlangıçta boştur; güvenli bir değer tahmin edilmez. Tahta genişliği, sıra derzi, kenar boşluğu, boy ek derzi ve minimum profil montaj boşluğu girilmeden gerçek sıra/birleşim hesabı sunulmaz. Eksikler açık uyarıdır.
+- Her geometrik deck sırası kendi başlangıcından parçalara ayrılır; derz hesaba katılır. Çift desteğin yüzleri ilgili iki deck ucuna karşılık gelir. Profil yüzeyleri arasındaki deck derzi, istenen montaj boşluğunu karşılamıyorsa birleşim doğrulanmaz.
+- Üst/alt/çevre katmanlarını açıp kapatın. Kırmızı üst, mavi alt, sarı çevre, turuncu ek destekleri, gri hariç alanlardır. Kalem veya dokunmayla profil seçin; kodu, gerçek boyu, kesiti, kotu ve bağlantıları özelliklerde görün.
+- Ekle aracı iki tuval noktasından manuel profil oluşturur. Taşı aracı sürükler; özelliklerde başlangıca taşıma, iki uç koordinatı, sabit uçla boy ve katman düzenleme de vardır. Silme, geri/ileri ve otomatik plana dönüş çalışır. Manuel işlemler sonrasında metraj/uyarılar yeniden hesaplanır; silinen profiller ve mesnetler sessizce geri eklenmez.
+- Profil özelliklerindeki ayak/mesnet alanından konum/tip ekleyin veya mevcut kimlikle düzenleyip silin. Seçili alt profile bağlanabilir; yanlış temas ayrıca uyarılır. Bu geometrik kontrol zemin veya taşıma kapasitesi onayı değildir.
+- Ayarlar panelindeki uygulanmamış metin girişleri panel gizlense de oturum içinde korunur. Oluştur ile uygulanır; uygulanmamış ayar varken plan kaydı engellenir. Kaydet planı SQLite'a bağlar.
+- Kaynak alan değişirse eski plan uyarılır; düzenleme/kayıt öncesi yeniden oluşturmak gerekir. Görünürlük, ad veya bağımsız ölçü değişimi alan geometrisini değiştirmediği için planı gereksiz yere geçersiz kılmaz.
+
+Durum daima **Ön Yerleşim — Teknik Onay Gerekli**. Bütün fiziksel hatların `productionReady` değeri false'tur. Stok aşımı ek gereksinimi olarak işaretlenir; otomatik kesme, stok dağıtma veya minimum fire hesabı yapılmaz. Yük, açıklık ve bağlantı verileri saklanabilir fakat bu sürüm statik hesap yapmaz. FAZ 03'e geçilmedi.
+
+Düzensiz sınırlarda tam tahta genişliğini kanıtlayan dikdörtgen sıra aralıkları kullanılır; sınır kamaları/kalan dar şeritler için özel döşeme uyarısı vardır. Gerçek profil genişliği, merkez hattı alan içinde olsa da delik/sınır dışına taşabiliyorsa uyarılır. Aynı kotta çakışan kesitler ve doğrulanamayan deck uçları teknik inceleme gerektirir; montaja hazır gösterilmez. Çok yoğun aday/kesişim sayıları açık kaynak sınırı hatasıyla durdurulur.
+
+Model/algoritma: `src/modules/framing/{model,config,geometry,engine,validation,operations,persistence}.ts`. Skia/etkileşim ayrı bileşen ve hook'lardadır. Proje başına bir güncel plan, profil/bağlantı/mesnet/parça/ayar/manuel değişiklik/teknik durum/tarih verileriyle saklanır. Şema 1→2 migration yalnız `framing_plans` tablosu ekler; projeler ve çizimler korunur. Kaynak geometri imzası kayıt anında atomik olarak denetlenir.
+
+[FAZ 02 test ve cihaz raporu](docs/FAZ02-VERIFICATION.md) · [Değişen dosyalar](docs/FAZ02-CHANGES.md)
+
+## Alan çizimi kullanımı
 
 1. Projeler'den bir proje oluşturun veya mevcut projenin çizimini açın.
 2. Çizgi aracında köşelere dokunun. İlk köşeye dönün veya ✓ ile sınırı kapatın. Hassas mm girişini özellik panelinden kullanabilirsiniz.
@@ -44,7 +66,7 @@ Açık veya geçersiz bir dış sınır/boşlukta kesin alan gösterilmez. Brüt
 
 Koordinatlar mm, alan hesabı mm²→m², çevre mm→m'dir. [polygon-clipping](https://github.com/mfogel/polygon-clipping) 0.15.7 yalnız birleşim/fark işlemleri için eklendi. Geçersiz poligonlar kütüphaneye verilmeden doğrulanır; dışarı taşan boşluk sessizce kırpılmaz.
 
-SQLite tabloları değişmediği için `user_version=1` korunur. Eski `version:1` JSON okuyucuda `version:2`'ye dönüştürülür; ilk çizgi dış sınır, ek çizgiler serbest çizgi olarak korunur. Yalnız açıkça tekrarlanan ilk/son nokta varsa kapalı sınır tanınır ve son mükerrer koordinat temsilden kaldırılır. Okuma eski kaydı değiştirmez; kullanıcı kaydettiğinde yeni belge yazılır. Alan geometrisi hatalıysa düzeltilebilmesi için veri taslak olarak okunabilir/saklanabilir; hesap sonucu verilmez. Gelecek Go servisi aynı sürümlü mm JSON sözleşmesini kullanabilir.
+FAZ 01 çizim tabloları korunur; FAZ 02 migration ile `user_version=2` ve ayrı `framing_plans` tablosu eklenir. Eski `version:1` JSON okuyucuda `version:2`'ye dönüştürülür; ilk çizgi dış sınır, ek çizgiler serbest çizgi olarak korunur. Yalnız açıkça tekrarlanan ilk/son nokta varsa kapalı sınır tanınır ve son mükerrer koordinat temsilden kaldırılır. Okuma eski kaydı değiştirmez; kullanıcı kaydettiğinde yeni belge yazılır. Alan geometrisi hatalıysa düzeltilebilmesi için veri taslak olarak okunabilir/saklanabilir; hesap sonucu verilmez. Gelecek Go servisi aynı sürümlü mm JSON sözleşmesini kullanabilir.
 
 ## Testler
 
@@ -62,6 +84,6 @@ UI testleri gerçek editör hook'u ve gerçek SQLite repository'siyle çalışı
 
 ## Sınırlar
 
-JavaScript çift duyarlıklı sayılar kullanılır; koordinat sınırı eksen başına ±100 km'dir. Çok yakın kollinear geometriler sonlu sayı duyarlılığına tabidir. Ölçü kilidi/kısıt çözücü, otomatik karkas, fire optimizasyonu, parsel API ve PDF bu fazda yoktur. Fiziksel Pencil basıncı/eğimi ve serbest el mürekkebi eklenmedi; köşe girişi/taşıma temelidir. Otomatik kayıt yoktur; kaydedilmemiş değişikliklerle çıkışta onay istenir. Uygulama zorla kapatılırsa kaydedilmemiş düzenlemeler kaybolabilir.
+JavaScript çift duyarlıklı sayılar kullanılır; koordinat sınırı eksen başına ±100 km'dir. Çok yakın kollinear geometriler sonlu sayı duyarlılığına tabidir. Ölçü kilidi/kısıt çözücü, fire optimizasyonu, parsel API ve PDF bu fazda yoktur. Fiziksel Pencil basıncı/eğimi ve serbest el mürekkebi eklenmedi; köşe girişi/taşıma temelidir. Otomatik kayıt yoktur; kaydedilmemiş değişikliklerle çıkışta onay istenir. Uygulama zorla kapatılırsa kaydedilmemiş düzenlemeler kaybolabilir.
 
 Harici diskin `._*` AppleDouble dosyaları Metro ve Git tarafından dışlanır. Jest için aynı dışlama ve Lucide'ın CJS test eşlemesi bulunur.

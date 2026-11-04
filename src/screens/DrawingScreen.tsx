@@ -1,7 +1,13 @@
-import { View, KeyboardAvoidingView, Platform } from "react-native";
+import { View, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
-import { ArrowLeft, Save, SlidersHorizontal, X } from "lucide-react-native";
+import {
+  ArrowLeft,
+  Save,
+  SlidersHorizontal,
+  X,
+  Layers,
+} from "lucide-react-native";
 import { Button, IconButton, Label, Page, StateView } from "../components/ui";
 import { useTheme, useResponsive } from "../core/theme/theme";
 import { DrawingCanvas } from "../modules/drawing/components/DrawingCanvas";
@@ -87,6 +93,19 @@ export default function DrawingScreen() {
               onPress={() => w.setPanel((v) => !v)}
             />
           )}
+          <IconButton
+            icon={Layers}
+            label="Karkas planını aç"
+            disabled={w.saving}
+            onPress={() => {
+              if (w.dirty)
+                Alert.alert(
+                  "Önce çizimi kaydedin",
+                  "Karkas kayıtlı alan geometrisinden oluşturulur.",
+                );
+              else router.push({ pathname: "/framing/[id]", params: { id } });
+            }}
+          />
           <Button
             title="Kaydet"
             icon={Save}

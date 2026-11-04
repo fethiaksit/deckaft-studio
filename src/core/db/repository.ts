@@ -1,4 +1,7 @@
-import { SCHEMA } from "./schema";
+import type { FramingPlan } from "../../modules/framing/model";
+import { parseFraming } from "../../modules/framing/persistence";
+import { sourceGeometrySignature } from "../../modules/framing/engine";
+import { SCHEMA, FRAMING_MIGRATION } from "./schema";
 import {
   validateProject,
   type Project,
@@ -28,9 +31,19 @@ export class ProjectRepository {
     const rows = await this.db.getAllAsync<{ user_version: number }>(
       "PRAGMA user_version",
     );
-    if ((rows[0]?.user_version ?? 0) > 1)
+    if ((rows[0]?.user_version ?? 0) > 2)
       throw new Error("Veritabanı daha yeni bir uygulama sürümü gerektiriyor.");
     await this.db.execAsync(SCHEMA);
+    if ((rows[0]?.user_version ?? 0) < 2) {
+      try {
+        await this.db.execAsync(FRAMING_MIGRATION);
+      } catch (error) {
+        try {
+          await this.db.execAsync("ROLLBACK");
+        } catch {}
+        throw error;
+      }
+    }
   }
   list(): Promise<Project[]> {
     return this.db.getAllAsync<Project>(
@@ -102,6 +115,56 @@ export class ProjectRepository {
       serialized,
       new Date().toISOString(),
     );
+  }
+  async getFraming(projectId: string): Promise<FramingPlan | null> {
+    const rows = await this.db.getAllAsync<{ id: string; document: string }>(
+      "SELECT id,document FROM framing_plans WHERE projectId=?",
+      projectId,
+    );
+    if (!rows[0]) return null;
+    const plan = parseFraming(rows[0].document);
+    if (plan.projectId !== projectId || plan.id !== rows[0].id)
+      throw new Error("Karkas proje kimliği uyuşmuyor.");
+    const doc = await this.getDrawing(projectId);
+    if (plan.sourceGeometry !== sourceGeometrySignature(doc))
+      return {
+        ...plan,
+        warnings: [
+          ...plan.warnings.filter((w) => w.code !== "STALE_SOURCE"),
+          {
+            code: "STALE_SOURCE",
+            message: "Alan değişti; karkas yeniden oluşturulmalıdır.",
+          },
+        ],
+      };
+    return plan;
+  }
+  async saveFraming(input: FramingPlan): Promise<void> {
+    const plan = parseFraming(JSON.stringify(input));
+    const rows = await this.db.getAllAsync<{ document: string }>(
+      "SELECT document FROM drawings WHERE projectId=?",
+      plan.projectId,
+    );
+    if (!rows[0]) throw new Error("Önce alan çizimini kaydedin.");
+    if (
+      plan.sourceGeometry !==
+      sourceGeometrySignature(parseDrawing(rows[0].document))
+    )
+      throw new Error("Alan değişti; karkası yeniden oluşturun.");
+    const result = await this.db.runAsync(
+      "INSERT INTO framing_plans(id,projectId,document,createdAt,updatedAt) SELECT ?,?,?,?,? WHERE EXISTS (SELECT 1 FROM drawings WHERE projectId=? AND document=?) ON CONFLICT(projectId) DO UPDATE SET id=excluded.id,document=excluded.document,createdAt=excluded.createdAt,updatedAt=excluded.updatedAt",
+      plan.id,
+      plan.projectId,
+      JSON.stringify(plan),
+      plan.createdAt,
+      plan.updatedAt,
+      plan.projectId,
+      rows[0].document,
+    );
+    if (!result.changes)
+      throw new Error(
+        "Alan kayıt sırasında değişti; karkası yeniden oluşturun.",
+      );
   }
   async getSetting(key: string): Promise<string | null> {
     return (

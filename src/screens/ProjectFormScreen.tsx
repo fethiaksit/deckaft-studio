@@ -7,7 +7,7 @@ import {
   Alert,
 } from "react-native";
 import { router, useLocalSearchParams, usePreventRemove } from "expo-router";
-import { Save, PenTool, Trash2 } from "lucide-react-native";
+import { Save, PenTool, Trash2, Layers } from "lucide-react-native";
 import { Page, Field, Button, Label, Card, StateView } from "../components/ui";
 import { useRepository } from "../core/db/provider";
 import { errorMessage, useProjects } from "../core/store/projects";
@@ -277,6 +277,15 @@ export default function ProjectFormScreen() {
                   disabled={busy || dirty}
                   onPress={() =>
                     router.push({ pathname: "/drawing/[id]", params: { id } })
+                  }
+                />
+                <Button
+                  title="Karkas planını aç"
+                  icon={Layers}
+                  variant="secondary"
+                  disabled={busy || dirty}
+                  onPress={() =>
+                    router.push({ pathname: "/framing/[id]", params: { id } })
                   }
                 />
                 {dirty && (

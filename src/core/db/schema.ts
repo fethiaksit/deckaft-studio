@@ -13,5 +13,18 @@ CREATE TABLE IF NOT EXISTS drawings (
   document TEXT NOT NULL, updatedAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
-PRAGMA user_version = 1;
+
+`;
+
+export const FRAMING_MIGRATION = `
+BEGIN IMMEDIATE;
+CREATE TABLE IF NOT EXISTS framing_plans (
+ id TEXT PRIMARY KEY NOT NULL,
+ projectId TEXT UNIQUE NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+ document TEXT NOT NULL,
+ createdAt TEXT NOT NULL,
+ updatedAt TEXT NOT NULL
+);
+PRAGMA user_version = 2;
+COMMIT;
 `;

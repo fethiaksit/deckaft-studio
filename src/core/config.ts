@@ -1,6 +1,6 @@
 export const APP = {
   name: "DeckAft Studio",
-  phase: "FAZ 01",
+  phase: "FAZ 02",
   database: "deckaft-studio.db",
   contentMaxWidth: 1120,
   minTouchSize: 44,
@@ -15,7 +15,7 @@ export const modules = {
   framing: {
     title: "Karkas Planı",
     description:
-      "Profil yerleşimi ve karkas hesaplama motoru sonraki fazlarda eklenecek.",
+      "İki katmanlı karkas ön yerleşimi, profil düzenleme ve metraj.",
     icon: "layers",
   },
   cutting: {

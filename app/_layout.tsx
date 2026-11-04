@@ -21,6 +21,7 @@ function Navigation() {
         <Stack.Screen name="project/[id]" />
         <Stack.Screen name="drawing/[id]" options={{ gestureEnabled: false }} />
         <Stack.Screen name="module/[id]" />
+        <Stack.Screen name="framing/[id]" options={{ gestureEnabled: false }} />
       </Stack>
     </>
   );
