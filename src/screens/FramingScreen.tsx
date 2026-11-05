@@ -1,4 +1,6 @@
-import { View, KeyboardAvoidingView, Platform } from "react-native";
+import { View, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+import { useMemo, useState } from "react";
+import { estimateCutting } from "../modules/cutting/engine";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import {
@@ -23,6 +25,8 @@ export default function FramingScreen() {
   const w = useFramingWorkspace(id);
   const { colors } = useTheme();
   const { tablet, height } = useResponsive();
+  const [showCuts, setShowCuts] = useState(false);
+  const cuts = useMemo(() => w.plan && !w.stale && !w.settingsDirty ? estimateCutting(w.plan) : null, [w.plan, w.stale, w.settingsDirty]);
   if (w.loading || w.loadError)
     return (
       <Page title="Karkas çalışma alanı" back>
@@ -117,6 +121,54 @@ export default function FramingScreen() {
             </Label>
           )}
         </View>
+        {w.plan && (
+          <View style={{ paddingHorizontal: 10, paddingVertical: 5 }}>
+            <Button
+              title={showCuts ? "Kesim tahminini gizle" : "6 m Kesim Tahmini"}
+              onPress={() => setShowCuts(!showCuts)}
+            />
+            {showCuts && (
+              <ScrollView style={{ maxHeight: tablet ? 240 : 185, marginTop: 8 }}>
+                <Label style={{ fontWeight: "700" }}>FAZ 03 — Ön Kesim Hesabı</Label>
+                <Label muted style={{ fontSize: 11 }}>
+                  Teknik/imalat onayı değildir. Kesimler 3 mm veya ayarlanan testere payıyla tahmin edilir.
+                </Label>
+                {!cuts ? (
+                  <Label style={{ color: colors.danger }}>
+                    Alan veya karkas ayarları değişti. Önce planı güncelleyin.
+                  </Label>
+                ) : (
+                  <>
+                    <Label>
+                      {cuts.stocks.length} tam boy · {(cuts.totalPurchasedMm / 1000).toFixed(2)} m satın alma
+                    </Label>
+                    <Label muted>
+                      Parça: {(cuts.totalPieceMm / 1000).toFixed(2)} m · Kesim kaybı: {cuts.totalKerfMm.toFixed(0)} mm · Kalan: {(cuts.totalRemainderMm / 1000).toFixed(2)} m
+                    </Label>
+                    {cuts.groups.map((g) => (
+                      <Label key={g.sectionKey} style={{ fontSize: 11 }}>
+                        {g.sectionKey.replaceAll("|", " / ")}: {g.stockCount} boy
+                      </Label>
+                    ))}
+                    {cuts.stocks.map((bar) => (
+                      <Label key={bar.id} style={{ fontSize: 11 }}>
+                        {bar.id.split(":").at(-1)} — {bar.pieces.map((p) => `${p.code}: ${p.lengthMm.toFixed(0)}`).join(" + ")} mm · Kalan {bar.remainderMm.toFixed(0)} mm
+                      </Label>
+                    ))}
+                    {cuts.exclusions.map((e) => (
+                      <Label key={e.memberId} style={{ color: colors.danger, fontSize: 11 }}>
+                        Hariç {e.code}: {e.reason}
+                      </Label>
+                    ))}
+                    {cuts.warnings.map((warning, i) => (
+                      <Label key={i} muted style={{ fontSize: 11 }}>{warning}</Label>
+                    ))}
+                  </>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        )}
         {w.error && (
           <Label
             accessibilityRole="alert"
