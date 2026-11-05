@@ -30,8 +30,32 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# local env files and credentials
+.env
+.env.*
+*.env
+*.pfx
+*.cer
+*.crt
+*.der
+*.keystore
+*.p7b
+*.p7c
+.npmrc
+.netrc
+credentials.json
+service-account*.json
+serviceAccount*.json
+secrets/
+.secrets/
+
+# local SQLite databases and sidecars
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
 
 # typescript
 *.tsbuildinfo
