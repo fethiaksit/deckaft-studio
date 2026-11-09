@@ -174,9 +174,9 @@ test.each([false, true])(
     await waitFor(() =>
       expect(screen.getByTestId("native-canvas-boundary")).toBeTruthy(),
     );
-    expect(screen.getByLabelText("Çizimi ortala")).toBeTruthy();
+    expect(screen.getByLabelText("Çizimi Ekrana Sığdır")).toBeTruthy();
     if (tablet) {
-      expect(screen.getByText("Katmanlar")).toBeTruthy();
+      expect(screen.getByText("Gelişmiş seçenekler")).toBeTruthy();
       expect(screen.queryByLabelText("Ölçüler ve özellikler")).toBeNull();
     } else {
       expect(screen.getByLabelText("Ölçüler ve özellikler")).toBeTruthy();
@@ -200,6 +200,7 @@ test("phone controls create a measured polygon and save via real repository", as
     expect(screen.getByTestId("native-canvas-boundary")).toBeTruthy(),
   );
   await fireEvent.press(screen.getByLabelText("Ölçüler ve özellikler"));
+  await fireEvent.press(screen.getByRole("radio", { name: "Hassas Teknik" }));
   await fireEvent.press(
     screen.getByRole("button", { name: "Dış alanı başlat" }),
   );
@@ -219,4 +220,44 @@ test("phone controls create a measured polygon and save via real repository", as
   expect((await mockRepo.getDrawing(mockProjectId)).paths[0]?.points).toEqual(
     square,
   );
+});
+
+test("ambiguous cm edit waits for an anchor and preserves viewport and closed SQLite geometry", async () => {
+  const h = await ready();
+  for (const p of [
+    { x: 0, y: 0 },
+    { x: 2500, y: 0 },
+    { x: 2500, y: 4000 },
+    { x: 0, y: 4000 },
+  ])
+    await act(() => h.result.current.point(p, false));
+  await act(() =>
+    h.result.current.point({ x: 5 / h.result.current.viewport.scale, y: 0 }),
+  );
+  expect(h.result.current.report.netM2).toBe(10);
+  await act(() => h.result.current.setSize({ width: 393, height: 480 }));
+  await act(() => h.result.current.fit());
+  await act(() => h.result.current.zoom(1.25));
+  const before = h.result.current.viewport;
+  const past = h.result.current.history.past.length;
+  await act(() => {
+    expect(h.result.current.prepareResize("300 cm")).toEqual(["start", "end"]);
+  });
+  expect(h.result.current.history.past.length).toBe(past);
+  await act(() => h.result.current.resize("300 cm", "start"));
+  expect(h.result.current.viewport).toEqual(before);
+  expect(h.result.current.report.netM2).toBe(11);
+  expect(h.result.current.history.past.length).toBe(past + 1);
+  await act(() =>
+    h.result.current.constrain({ axis: "horizontal", lengthMm: 3000 }, "start"),
+  );
+  await act(() => h.result.current.resize("250 cm", "start"));
+  expect(h.result.current.report.netM2).toBe(11);
+  expect(h.result.current.error).toMatch(/çeliş/i);
+  await act(() => h.result.current.save());
+  const saved = await mockRepo.getDrawing(mockProjectId);
+  expect(saved.paths[0]?.closed).toBe(true);
+  expect(saved.paths[0]?.constraints).toEqual([
+    { index: 0, axis: "horizontal", lengthMm: 3000 },
+  ]);
 });

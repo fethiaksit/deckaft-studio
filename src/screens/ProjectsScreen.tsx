@@ -10,9 +10,11 @@ import { useResponsive } from "../core/theme/theme";
 export default function ProjectsScreen({
   drawing = false,
   framing = false,
+  cutting = false,
 }: {
   drawing?: boolean;
   framing?: boolean;
+  cutting?: boolean;
 }) {
   const repo = useRepository();
   const { tablet } = useResponsive();
@@ -31,18 +33,22 @@ export default function ProjectsScreen({
   return (
     <Page
       title={
-        framing
-          ? "Karkas planları"
-          : drawing
-            ? "Çizim çalışma alanı"
-            : "Projelerim"
+        cutting
+          ? "Profil kesim planları"
+          : framing
+            ? "Karkas planları"
+            : drawing
+              ? "Çizim çalışma alanı"
+              : "Projelerim"
       }
       subtitle={
-        framing
-          ? "Karkas oluşturmak veya açmak için proje seçin."
-          : drawing
-            ? "Çizimine devam etmek için bir proje seçin."
-            : `${projects.length} proje · Bu cihazda saklanıyor`
+        cutting
+          ? "Kesim planı oluşturmak veya açmak için proje seçin."
+          : framing
+            ? "Karkas oluşturmak veya açmak için proje seçin."
+            : drawing
+              ? "Çizimine devam etmek için bir proje seçin."
+              : `${projects.length} proje · Bu cihazda saklanıyor`
       }
       action={
         <Button
@@ -90,6 +96,18 @@ export default function ProjectsScreen({
           {visible.map((p) => (
             <View key={p.id} style={{ width: tablet ? "48%" : "100%", gap: 8 }}>
               <ProjectCard project={p} />
+              {cutting && (
+                <Button
+                  title={`${p.name} · Kesim planı`}
+                  variant="secondary"
+                  onPress={() =>
+                    router.push({
+                      pathname: "/cutting/[id]",
+                      params: { id: p.id },
+                    })
+                  }
+                />
+              )}
               {framing && (
                 <Button
                   title={`${p.name} · Karkas planı`}

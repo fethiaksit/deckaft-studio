@@ -1,13 +1,14 @@
-# DeckAft Studio · FAZ 02
+# DeckAft Studio · FAZ 03
 
-React Native + Expo uygulaması: yerel proje yönetimi, gerçek ölçülü teknik alan çizimi ve net deck m² hesabı. FAZ 00/01 korunur; iki katmanlı karkas ön yerleşimi eklendi. Kesim/PDF motorları bu fazda eklenmedi.
+React Native + Expo uygulaması: yerel proje yönetimi, gerçek ölçülü teknik alan çizimi ve net deck m² hesabı. FAZ 00–02 korunur; iki katmanlı karkas üzerinden profil kesim planı, stok optimizasyonu ve artık takibi eklenmiştir.
 
 ## Kurulum ve çalıştırma
 
 Node 26 ve npm ile doğrulandı. Testlerde `node:sqlite` kullanılır.
 
 ```sh
-cd /Volumes/KIOXIA/deckaft-studio
+git clone https://github.com/fethiaksit/deckaft-studio.git
+cd deckaft-studio
 npm ci
 npm start
 npm run ios       # Xcode + iOS Simulator
@@ -15,6 +16,19 @@ npm run android   # Android SDK + çalışan emülatör veya bağlı cihaz
 ```
 
 SDK 58 uyumlu Expo Go veya native geliştirme derlemesi gerekir. Başka Metro çalışıyorsa `npx expo start --port 8082` kullanabilirsiniz. Web desteği bu teslimin kapsamı değildir.
+
+## FAZ 03 — Profil kesim planı
+
+1. Karkası oluşturup kaydedin. Karkas ekranındaki **Profil kesim planını aç** düğmesini kullanın veya ana sayfadan **Malzeme ve Kesim Listesi**'nde proje seçin.
+2. **Kesim ayarları** ile stok boyunu, testere payını, başlangıç/son uç düzeltmelerini ve minimum artık boyunu girin. Başlangıç değerleri 6000 mm stok, 3 mm testere, 0 mm uç düzeltme ve 500 mm minimum artıktır. Stok ve testere başlangıç değerleri kayıtlı karkas ayarlarından gelir.
+3. **Kesim planını oluştur** ile stok adetlerini, satın alma tahminini, fireyi, kullanılabilir artıkları ve hariç profilleri görün. Çubukları yatay kaydırın; bir parçaya dokunarak stok kodunu, karkas katmanını ve gerçek konumunu açın. **Karkasta vurgula** seçili profili karkas tuvalinde gösterir.
+4. **Kesim planını kaydet** ile sonucu SQLite'a yazın. Kaynak alan veya karkas değiştiğinde eski plan ve artık envanteri geçersiz sayılır; güncel karkası kaydedip hesabı yenileyin.
+
+Her parçaya, son parça dahil, bir ayırma kesimi ayrılır. Sıfırdan büyük her uç düzeltmesi kendi talaş kaybını ve bir testere payını ekler. Bu modelde 3000 + 3000 mm tek stoktan çıkmaz; 2450 + 1800 + 1700 mm, üç 3 mm kesimden sonra 41 mm bırakır. Aynı malzeme, kesit ve et kalınlığındaki parçalar birlikte hesaplanır. Ek tasarımı gereken veya kaynak geometrisi doğrulanmayan profiller satın alma hesabına katılmaz.
+
+Sonuç, dahil edilen profiller için kanıtlanmış minimum stok adedi veya optimalitesi kanıtlanmamış geçerli bir çözüm olarak gösterilir. Fire miktarı, kısa artık + uç düzeltme + testere kaybıdır. Optimum stok adedi, optimum artık dağılımı, statik yeterlilik ve imalat onayı ayrı kavramlardır. Projeler arası otomatik artık tüketimi yoktur.
+
+[FAZ 03 doğrulama raporu](docs/FAZ03-VERIFICATION.md) · [Teknik ayrıntılar ve sınırlar](docs/FAZ03-STATUS.md)
 
 ## FAZ 02 — Karkas planı
 
@@ -30,7 +44,7 @@ Ana sayfadaki Karkas Planı'ndan proje seçin veya kayıtlı çizim/proje detay�
 - Ayarlar panelindeki uygulanmamış metin girişleri panel gizlense de oturum içinde korunur. Oluştur ile uygulanır; uygulanmamış ayar varken plan kaydı engellenir. Kaydet planı SQLite'a bağlar.
 - Kaynak alan değişirse eski plan uyarılır; düzenleme/kayıt öncesi yeniden oluşturmak gerekir. Görünürlük, ad veya bağımsız ölçü değişimi alan geometrisini değiştirmediği için planı gereksiz yere geçersiz kılmaz.
 
-Durum daima **Ön Yerleşim — Teknik Onay Gerekli**. Bütün fiziksel hatların `productionReady` değeri false'tur. Stok aşımı ek gereksinimi olarak işaretlenir; otomatik kesme, stok dağıtma veya minimum fire hesabı yapılmaz. Yük, açıklık ve bağlantı verileri saklanabilir fakat bu sürüm statik hesap yapmaz. FAZ 03'e geçilmedi.
+Durum daima **Ön Yerleşim — Teknik Onay Gerekli**. Bütün fiziksel hatların `productionReady` değeri false'tur. Stok aşımı ek gereksinimi olarak işaretlenir; otomatik kesme, stok dağıtma veya minimum fire hesabı yapılmaz. Yük, açıklık ve bağlantı verileri saklanabilir fakat bu sürüm statik hesap yapmaz. FAZ 03, karkasın kaynak geometrisini değiştirmeden geometrik kesim hesabı yapar.
 
 Düzensiz sınırlarda tam tahta genişliğini kanıtlayan dikdörtgen sıra aralıkları kullanılır; sınır kamaları/kalan dar şeritler için özel döşeme uyarısı vardır. Gerçek profil genişliği, merkez hattı alan içinde olsa da delik/sınır dışına taşabiliyorsa uyarılır. Aynı kotta çakışan kesitler ve doğrulanamayan deck uçları teknik inceleme gerektirir; montaja hazır gösterilmez. Çok yoğun aday/kesişim sayıları açık kaynak sınırı hatasıyla durdurulur.
 

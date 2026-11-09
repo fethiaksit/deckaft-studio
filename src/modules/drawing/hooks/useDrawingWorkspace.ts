@@ -13,7 +13,6 @@ import {
 } from "../../geometry/interaction";
 import {
   emptyDrawing,
-  appendPoint,
   addDimension,
   type DrawingDocument,
   type DrawingTool,
@@ -21,9 +20,14 @@ import {
   type VoidKind,
 } from "../model";
 import { createEditor, editorReducer } from "../editor";
-import { DEFAULT_VIEWPORT, zoomAt } from "../coordinates";
+import { DEFAULT_VIEWPORT, worldToScreen, zoomAt } from "../coordinates";
 import {
   closeRegion,
+  addSketchPoint,
+  closureTarget,
+  edgeEditChoices,
+  joinSketchLines,
+  setEdgeConstraint,
   startRegion,
   movePoint,
   editEdge,
@@ -47,6 +51,8 @@ export function useDrawingWorkspace(projectId: string) {
   const document = history.present;
   const [baseline, setBaseline] = useState(JSON.stringify(emptyDrawing()));
   const [viewport, setViewport] = useState(DEFAULT_VIEWPORT);
+  const [mode, setMode] = useState<"sketch" | "technical">("sketch");
+  const [closureHint, setClosureHint] = useState<PointMm | null>(null);
   const [tool, setTool] = useState<DrawingTool>("draw");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [measureStart, setMeasureStart] = useState<PointMm | null>(null);
@@ -96,6 +102,7 @@ export function useDrawingWorkspace(projectId: string) {
       .then(([p, d]) => {
         if (!active) return;
         if (!p) throw new Error("Proje bulunamadı.");
+        fittedProject.current = null;
         setProject(p);
         const open = d.paths.find((p) => !p.closed);
         dispatch({
@@ -156,6 +163,7 @@ export function useDrawingWorkspace(projectId: string) {
             excludedM2: null,
             netM2: null,
             perimeterM: null,
+            planState: "invalid" as const,
           }
         : drawingArea(document),
     [document, preview],
@@ -216,6 +224,16 @@ export function useDrawingWorkspace(projectId: string) {
   function changeTool(value: DrawingTool) {
     if (value === "draw" || value === "measure" || value === "pan")
       setSelection(null);
+    if (value === "draw") {
+      if (activePath?.closed) {
+        const open = document.paths.findLast(
+          (p) => !p.closed && pathVisible(document, p),
+        );
+        dispatch({ type: "newPath", id: open?.id ?? newId() });
+      }
+      setPanel(false);
+    }
+    setClosureHint(null);
     setTool(value);
     setMeasureStart(null);
     setHint(null);
@@ -225,25 +243,19 @@ export function useDrawingWorkspace(projectId: string) {
   function point(raw: PointMm, withSnap = true) {
     perform(() => {
       if (tool === "draw") {
-        if (activePath && !pathVisible(document, activePath))
-          throw new Error("Aktif alanın katmanını görünür yapın.");
-        const result = withSnap ? snap(raw) : { point: raw, kind: null };
-        setHint(result);
-        const first = activePath?.points[0];
-        const close =
-          activePath &&
-          !activePath.closed &&
-          activePath.points.length >= 3 &&
-          first &&
-          (withSnap
-            ? Math.hypot(raw.x - first.x, raw.y - first.y) <=
-              DRAWING.snapTolerancePx / viewport.scale
-            : raw.x === first.x && raw.y === first.y);
-        if (close) {
-          apply(closeRegion(document, pathId));
+        const result = addSketchPoint(
+          document,
+          pathId,
+          raw,
+          viewport.scale,
+          withSnap,
+        );
+        apply(result.document);
+        setHint(result.hint);
+        if (result.closed) {
           setSelection({ kind: "edge", pathId, index: 0 });
           changeTool("select");
-        } else apply(appendPoint(document, pathId, result.point));
+        }
       } else if (tool === "measure") {
         if (!document.layers.dimensions)
           throw new Error("Ölçü katmanını görünür yapın.");
@@ -270,13 +282,21 @@ export function useDrawingWorkspace(projectId: string) {
       apply(startRegion(document, id, role, name, kind));
       dispatch({ type: "newPath", id });
       setSelection(null);
-      changeTool("draw");
+      setTool("draw");
+      setMeasureStart(null);
+      setClosureHint(null);
+      setHint(null);
     });
   }
   function close() {
     perform(() => {
-      apply(closeRegion(document, pathId));
-      setSelection({ kind: "edge", pathId, index: 0 });
+      const targetId = selectedPath?.id ?? activePath?.id ?? pathId;
+      const nextDoc = closeRegion(document, targetId);
+      apply(nextDoc);
+      const outer = nextDoc.paths.find((p) => p.role === "outer" && p.closed);
+      const chosenId = outer?.id ?? targetId;
+      dispatch({ type: "newPath", id: chosenId });
+      setSelection({ kind: "edge", pathId: chosenId, index: 0 });
       changeTool("select");
     });
   }
@@ -293,6 +313,82 @@ export function useDrawingWorkspace(projectId: string) {
         ),
       );
     });
+  }
+  function prepareResize(text: string): ("start" | "end")[] {
+    let choices: ("start" | "end")[] = [];
+    perform(() => {
+      if (selection?.kind !== "edge" || !selectedPath)
+        throw Error("Önce bir kenar seçin.");
+      const mm = parseLength(text);
+      const a = selectedPath.points[selection.index]!,
+        b =
+          selectedPath.points[
+            (selection.index + 1) % selectedPath.points.length
+          ]!;
+      if (Math.abs(mm - Math.hypot(b.x - a.x, b.y - a.y)) <= DRAWING.epsilonMm)
+        return;
+      choices = edgeEditChoices(
+        document,
+        selection.pathId,
+        selection.index,
+        mm,
+      );
+      if (!choices.length)
+        throw Error(
+          "Bu boy iki uçta da sınırı, boşlukları veya ölçü kilitlerini bozuyor.",
+        );
+      if (choices.length === 1) {
+        apply(
+          editEdge(
+            document,
+            selection.pathId,
+            selection.index,
+            mm,
+            choices[0]!,
+          ),
+        );
+        choices = [];
+      }
+    });
+    return choices;
+  }
+  function constrain(
+    lock: Parameters<typeof setEdgeConstraint>[3],
+    fixed?: "start" | "end",
+  ) {
+    perform(() => {
+      if (selection?.kind !== "edge") throw Error("Önce bir kenar seçin.");
+      apply(
+        setEdgeConstraint(
+          document,
+          selection.pathId,
+          selection.index,
+          lock,
+          fixed,
+        ),
+      );
+    });
+  }
+  function join() {
+    perform(() => {
+      const id = selectedPath?.id ?? activePath?.id;
+      if (!id) throw Error("Önce açık bir çizgi seçin.");
+      const next = joinSketchLines(document, id);
+      const merged = next.paths.find(
+        (p) => p.closed && !document.paths.some((old) => old === p),
+      )!;
+      apply(next);
+      dispatch({ type: "newPath", id: merged.id });
+      setSelection({ kind: "edge", pathId: merged.id, index: 0 });
+      changeTool("select");
+    });
+  }
+  function previewClosure(raw: PointMm | null) {
+    setClosureHint(
+      raw && tool === "draw"
+        ? closureTarget(document, pathId, raw, viewport.scale)
+        : null,
+    );
   }
   function move(point: PointMm) {
     perform(() => {
@@ -425,9 +521,36 @@ export function useDrawingWorkspace(projectId: string) {
     busy.current = true;
     setSaving(true);
     setError("");
-    const snapshot = document;
+    let snapshot = document;
+    const hasClosedOuter = snapshot.paths.some(
+      (p) => p.role === "outer" && p.closed && p.points.length >= 3,
+    );
+    if (!hasClosedOuter) {
+      const closedDraft = snapshot.paths.find(
+        (p) => p.role === "draft" && p.closed && p.points.length >= 3,
+      );
+      if (closedDraft) {
+        snapshot = {
+          ...snapshot,
+          paths: snapshot.paths
+            .map((p) =>
+              p.role === "outer" && !p.closed
+                ? { ...p, role: "draft" as PathRole, name: "Çizgi" }
+                : p,
+            )
+            .map((p) =>
+              p.id === closedDraft.id
+                ? { ...p, role: "outer" as PathRole, name: "Dış alan" }
+                : p,
+            ),
+        };
+      }
+    }
     try {
       await repo.saveDrawing(projectId, snapshot);
+      if (snapshot !== document) {
+        apply(snapshot);
+      }
       setBaseline(JSON.stringify(snapshot));
       setSaved(true);
     } catch (e) {
@@ -437,6 +560,17 @@ export function useDrawingWorkspace(projectId: string) {
       setSaving(false);
     }
   }
+  const outsideViewport =
+    !!size.width &&
+    !!size.height &&
+    document.paths.some(
+      (p) =>
+        pathVisible(document, p) &&
+        p.points.some((q) => {
+          const v = worldToScreen(q, viewport);
+          return v.x < 0 || v.y < 0 || v.x > size.width || v.y > size.height;
+        }),
+    );
   return {
     project,
     document,
@@ -453,6 +587,11 @@ export function useDrawingWorkspace(projectId: string) {
     changeTool,
     measureStart,
     hint,
+    mode,
+    setMode,
+    closureHint,
+    previewClosure,
+    outsideViewport,
     loading,
     loadError,
     error,
@@ -467,6 +606,9 @@ export function useDrawingWorkspace(projectId: string) {
     newRegion,
     close,
     resize,
+    prepareResize,
+    constrain,
+    join,
     move,
     merge,
     remove,

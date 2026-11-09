@@ -62,7 +62,7 @@ test("snapping uses pixel tolerance and nearest vertex priority", () => {
     3,
   );
 });
-test("fit centers negative bounds and clamps scale", () => {
+test("fit centers negative bounds and does not crop extremely large drawings", () => {
   const f = fitViewport(
     [
       { x: -1000, y: -500 },
@@ -86,6 +86,6 @@ test("fit centers negative bounds and clamps scale", () => {
       500,
       300,
     ).scale,
-    0.005,
+    420 / 2e8,
   );
 });

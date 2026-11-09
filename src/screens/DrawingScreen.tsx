@@ -119,36 +119,65 @@ export default function DrawingScreen() {
           <View style={{ flex: 1, minWidth: 0 }}>
             <View
               style={{
+                height: 28,
+                justifyContent: "center",
                 paddingHorizontal: 12,
-                paddingVertical: 6,
                 backgroundColor: colors.surface,
               }}
             >
-              <Label muted style={{ fontSize: 10, lineHeight: 15 }}>
-                {instruction}
-                {w.hint?.kind
-                  ? ` · ${{ vertex: "Köşeye yakalandı", grid: "Izgaraya hizalı", horizontal: "Yatay hizalı", vertical: "Dikey hizalı" }[w.hint.kind]}`
-                  : ""}
+              <Label
+                muted
+                numberOfLines={1}
+                style={{
+                  fontSize: 11,
+                  lineHeight: 15,
+                  color: w.error ? colors.danger : colors.muted,
+                }}
+                accessibilityRole={w.error && !w.panel ? "alert" : undefined}
+              >
+                {w.error && (!w.panel || tablet)
+                  ? w.error
+                  : w.closureHint
+                    ? "İlk köşe yakalandı · alanı kapat"
+                    : w.outsideViewport && w.tool !== "draw"
+                      ? "Köşeler görünüm dışında · Çizimi Ekrana Sığdır"
+                      : instruction}
               </Label>
             </View>
-            {w.error && (!w.panel || tablet) ? (
-              <Label
-                accessibilityRole="alert"
-                style={{ padding: 8, fontSize: 11, color: colors.danger }}
-              >
-                {w.error}
-              </Label>
-            ) : null}
             <View
               style={{ flex: 1 }}
               pointerEvents={w.saving ? "none" : "auto"}
             >
               <DrawingCanvas workspace={w} />
+              {!w.document.paths.some((p) => p.role === "outer") &&
+                !w.panel && (
+                  <View style={{ position: "absolute", top: 12, left: 12 }}>
+                    <Button
+                      title="Yeni Alan Çiz"
+                      onPress={() => {
+                        w.newRegion("outer", "Dış alan");
+                        w.setPanel(false);
+                      }}
+                    />
+                  </View>
+                )}
+              {w.outsideViewport && w.tool !== "draw" && (
+                <View style={{ position: "absolute", right: 10, top: 10 }}>
+                  <Button
+                    title="Çizimi Ekrana Sığdır"
+                    variant="secondary"
+                    onPress={w.fit}
+                  />
+                </View>
+              )}
             </View>
             {!tablet && w.panel && (
               <View
                 style={{
-                  height: Math.min(360, height * 0.43),
+                  height: Math.min(
+                    w.mode === "technical" ? 340 : 270,
+                    height * 0.4,
+                  ),
                   flexShrink: 1,
                   backgroundColor: colors.surface,
                   borderTopWidth: 1,

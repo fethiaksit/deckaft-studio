@@ -1,7 +1,13 @@
+import { parseCutting } from "../../modules/cutting/persistence";
+import {
+  framingRevision,
+  type CuttingPlan,
+  type RemnantInventoryItem,
+} from "../../modules/cutting/model";
 import type { FramingPlan } from "../../modules/framing/model";
 import { parseFraming } from "../../modules/framing/persistence";
 import { sourceGeometrySignature } from "../../modules/framing/engine";
-import { SCHEMA, FRAMING_MIGRATION } from "./schema";
+import { SCHEMA, FRAMING_MIGRATION, CUTTING_MIGRATION } from "./schema";
 import {
   validateProject,
   type Project,
@@ -31,12 +37,22 @@ export class ProjectRepository {
     const rows = await this.db.getAllAsync<{ user_version: number }>(
       "PRAGMA user_version",
     );
-    if ((rows[0]?.user_version ?? 0) > 2)
+    if ((rows[0]?.user_version ?? 0) > 3)
       throw new Error("Veritabanı daha yeni bir uygulama sürümü gerektiriyor.");
     await this.db.execAsync(SCHEMA);
     if ((rows[0]?.user_version ?? 0) < 2) {
       try {
         await this.db.execAsync(FRAMING_MIGRATION);
+      } catch (error) {
+        try {
+          await this.db.execAsync("ROLLBACK");
+        } catch {}
+        throw error;
+      }
+    }
+    if ((rows[0]?.user_version ?? 0) < 3) {
+      try {
+        await this.db.execAsync(CUTTING_MIGRATION);
       } catch (error) {
         try {
           await this.db.execAsync("ROLLBACK");
@@ -165,6 +181,91 @@ export class ProjectRepository {
       throw new Error(
         "Alan kayıt sırasında değişti; karkası yeniden oluşturun.",
       );
+  }
+  async getCutting(projectId: string): Promise<CuttingPlan | null> {
+    const rows = await this.db.getAllAsync<{
+      id: string;
+      document: string;
+      sourceRevision: string;
+      sourcePlanId: string;
+    }>(
+      "SELECT id,document,sourceRevision,sourcePlanId FROM cutting_plans WHERE projectId=?",
+      projectId,
+    );
+    if (!rows[0]) return null;
+    const p = parseCutting(rows[0].document);
+    if (
+      p.projectId !== projectId ||
+      p.id !== rows[0].id ||
+      p.sourceRevision !== rows[0].sourceRevision ||
+      p.sourcePlanId !== rows[0].sourcePlanId
+    )
+      throw Error("Kesim proje/kaynak kimliği uyuşmuyor.");
+    const source = await this.getFraming(projectId);
+    return {
+      ...p,
+      stale:
+        !source ||
+        framingRevision(source) !== p.sourceRevision ||
+        source.warnings.some((w) => w.code === "STALE_SOURCE"),
+    };
+  }
+  async saveCutting(input: CuttingPlan): Promise<void> {
+    const p = parseCutting(JSON.stringify(input));
+    const source = await this.getFraming(p.projectId);
+    if (
+      !source ||
+      framingRevision(source) !== p.sourceRevision ||
+      source.warnings.some((w) => w.code === "STALE_SOURCE")
+    )
+      throw Error("Karkas değişti; güncel kesim planı oluşturun.");
+    const drawings = await this.db.getAllAsync<{ document: string }>(
+      "SELECT document FROM drawings WHERE projectId=?",
+      p.projectId,
+    );
+    if (
+      !drawings[0] ||
+      sourceGeometrySignature(parseDrawing(drawings[0].document)) !==
+        source.sourceGeometry
+    )
+      throw Error("Alan değişti; güncel karkas oluşturun.");
+    const result = await this.db.runAsync(
+      "INSERT INTO cutting_plans(id,projectId,sourcePlanId,sourceRevision,document,createdAt) SELECT ?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM framing_plans WHERE projectId=? AND document=?) AND EXISTS (SELECT 1 FROM drawings WHERE projectId=? AND document=?) ON CONFLICT(projectId) DO UPDATE SET id=excluded.id,sourcePlanId=excluded.sourcePlanId,sourceRevision=excluded.sourceRevision,document=excluded.document,createdAt=excluded.createdAt",
+      p.id,
+      p.projectId,
+      p.sourcePlanId,
+      p.sourceRevision,
+      JSON.stringify(p),
+      p.createdAt,
+      p.projectId,
+      p.sourceRevision,
+      p.projectId,
+      drawings[0].document,
+    );
+    if (!result.changes)
+      throw Error("Kaynak kayıt sırasında değişti; kesimi yeniden oluşturun.");
+  }
+  async listRemnants(projectId: string): Promise<RemnantInventoryItem[]> {
+    const p = await this.getCutting(projectId);
+    if (!p) return [];
+    return p.remnants.map((r, i) => {
+      const stock = p.stocks.find((s) => s.id === r.stockId)!;
+      const source = JSON.parse(p.sourceRevision) as FramingPlan;
+      const member = source.members.find(
+        (m) => m.id === stock.pieces[0]!.memberId,
+      )!;
+      return {
+        id: `${p.id}:R-${i + 1}`,
+        sourceCuttingPlanId: p.id,
+        projectId,
+        stockId: r.stockId,
+        sectionKey: r.sectionKey,
+        section: { ...member.section },
+        lengthMm: r.lengthMm,
+        createdAt: p.createdAt,
+        status: p.stale ? "stale" : "available",
+      };
+    });
   }
   async getSetting(key: string): Promise<string | null> {
     return (

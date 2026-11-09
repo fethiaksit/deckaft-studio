@@ -75,7 +75,7 @@ test("schema migration preserves legacy projects/drawings and framing survives a
     await c.repo.init();
     assert.equal(
       c.sqlite.prepare("PRAGMA user_version").get()?.user_version,
-      2,
+      3,
     );
     assert.equal((await c.repo.list()).length, 1);
     assert.equal((await c.repo.getDrawing("legacy")).version, 2);

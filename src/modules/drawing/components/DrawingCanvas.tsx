@@ -12,7 +12,12 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
 import { useTheme } from "../../../core/theme/theme";
 import { worldToScreen, screenToWorld, zoomAt } from "../coordinates";
-import { pathVisible } from "../operations";
+import {
+  pathVisible,
+  resolveDrawingGeometry,
+  findChainStart,
+} from "../operations";
+import { areaLabelPoint } from "../../geometry/interaction";
 import { length } from "../../geometry/engine";
 import type { DrawingWorkspace } from "../hooks/useDrawingWorkspace";
 export function DrawingCanvas({
@@ -31,6 +36,12 @@ export function DrawingCanvas({
       .maxDuration(400)
       .maxDistance(9)
       .runOnJS(true)
+      .onBegin((e) =>
+        latest.current.previewClosure(
+          screenToWorld({ x: e.x, y: e.y }, latest.current.viewport),
+        ),
+      )
+      .onFinalize(() => latest.current.previewClosure(null))
       .onEnd((e, success) => {
         if (success && latest.current.tool !== "pan")
           latest.current.point(
@@ -99,6 +110,29 @@ export function DrawingCanvas({
     v = w.viewport,
     { width, height } = w.size;
   const paths = d.paths.filter((p) => pathVisible(d, p));
+  const resolvedGeometry = useMemo(() => resolveDrawingGeometry(d), [d]);
+  const target = useMemo(() => {
+    if (w.tool !== "draw" || !w.activePath || w.activePath.closed)
+      return undefined;
+    if (w.activePath.points.length >= 3 && pathVisible(d, w.activePath)) {
+      return w.activePath.points[0];
+    }
+    const chainStart = findChainStart(d.paths, w.activePath.id);
+    return chainStart ?? undefined;
+  }, [w.tool, w.activePath, d]);
+  const labelPoint = useMemo(() => {
+    const outer = resolvedGeometry.outer;
+    return outer && resolvedGeometry.valid
+      ? areaLabelPoint(
+          outer.points,
+          resolvedGeometry.voids.map((p) => p.points),
+        )
+      : null;
+  }, [resolvedGeometry]);
+  const areaPos =
+    w.report.netM2 !== null && d.layers.outer && labelPoint
+      ? worldToScreen(labelPoint, v)
+      : null;
   const spacing =
     d.snap.gridMm *
     Math.max(
@@ -147,9 +181,10 @@ export function DrawingCanvas({
           sa = worldToScreen(a, v),
           sb = worldToScreen(b, v);
         if (Math.hypot(sb.x - sa.x, sb.y - sa.y) < 42) continue;
+        const lock = p.constraints?.find((c) => c.index === i);
         labels.push({
           id: `${p.id}-${i}`,
-          text: `${(length(a, b) / 1000).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m`,
+          text: `${(length(a, b) / 1000).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m${lock?.lengthMm !== undefined ? " 🔒" : ""}`,
           x: (sa.x + sb.x) / 2,
           y: (sa.y + sb.y) / 2 - 19,
           color: p.role === "void" ? colors.accent : colors.text,
@@ -195,7 +230,7 @@ export function DrawingCanvas({
       <GestureDetector gesture={gestures}>
         <View
           collapsable={false}
-          style={{ flex: 1 }}
+          style={{ flex: 1, overflow: "hidden" }}
           accessibilityLabel="Akıllı milimetre çizim yüzeyi"
         >
           <Canvas style={{ flex: 1 }}>
@@ -218,22 +253,24 @@ export function DrawingCanvas({
                 />
               </>
             )}
-            {paths
-              .filter((p) => p.role === "outer" && p.closed)
-              .map((p) => (
+            {resolvedGeometry.valid &&
+              resolvedGeometry.outer &&
+              d.layers.outer && (
                 <Path
-                  key={`fill${p.id}`}
+                  key={`fill-${resolvedGeometry.outer.id}`}
                   path={Skia.Path.Polygon(
-                    p.points.map((p) => worldToScreen(p, v)),
+                    resolvedGeometry.outer.points.map((p) =>
+                      worldToScreen(p, v),
+                    ),
                     true,
                   )}
                   style="fill"
                   color={colors.accent}
                   opacity={0.09}
                 />
-              ))}
-            {paths
-              .filter((p) => p.role === "void" && p.closed)
+              )}
+            {resolvedGeometry.voids
+              .filter((p) => p.closed)
               .map((p) => (
                 <Path
                   key={`fill${p.id}`}
@@ -301,6 +338,15 @@ export function DrawingCanvas({
                   strokeWidth={1.4}
                 />
               ))}
+            {target && (
+              <Circle
+                c={worldToScreen(target, v)}
+                r={w.closureHint ? 12 : 9}
+                style="stroke"
+                strokeWidth={w.closureHint ? 3 : 1.5}
+                color={colors.accent}
+              />
+            )}
             {w.measureStart && d.layers.dimensions && (
               <Circle
                 c={worldToScreen(w.measureStart, v)}
@@ -329,6 +375,34 @@ export function DrawingCanvas({
           </Canvas>
         </View>
       </GestureDetector>
+      {areaPos &&
+        areaPos.x >= 45 &&
+        areaPos.x <= width - 45 &&
+        areaPos.y >= 16 &&
+        areaPos.y <= height - 16 && (
+          <Text
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: areaPos.x - 45,
+              top: areaPos.y - 13,
+              width: 90,
+              textAlign: "center",
+              color: colors.accent,
+              backgroundColor: colors.canvas,
+              padding: 3,
+              borderRadius: 5,
+              fontWeight: "700",
+              fontSize: 12,
+            }}
+          >
+            {w.report.netM2!.toLocaleString("tr-TR", {
+              maximumFractionDigits: 2,
+              minimumFractionDigits: 2,
+            })}{" "}
+            m²
+          </Text>
+        )}
       {labels
         .filter(
           (l) => l.x >= 0 && l.y >= 0 && l.x < width - 50 && l.y < height - 20,

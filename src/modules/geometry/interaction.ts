@@ -101,17 +101,62 @@ export function fitViewport(
     minY = Math.min(minY, p.y);
     maxY = Math.max(maxY, p.y);
   }
-  const scale = Math.max(
-    0.005,
-    Math.min(
-      2,
-      Math.max(1, width - 2 * padding) / (maxX - minX || 1),
-      Math.max(1, height - 2 * padding) / (maxY - minY || 1),
-    ),
+  const scale = Math.min(
+    2,
+    Math.max(1, width - 2 * padding) / (maxX - minX || 1),
+    Math.max(1, height - 2 * padding) / (maxY - minY || 1),
   );
   return {
     scale,
     x: width / 2 - ((minX + maxX) / 2) * scale,
     y: height / 2 - ((minY + maxY) / 2) * scale,
   };
+}
+
+/** Find a point on an interior scanline, outside all completed holes. */
+export function areaLabelPoint(
+  outer: PointMm[],
+  holes: PointMm[][],
+): PointMm | null {
+  if (outer.length < 3) return null;
+  const rings = [outer, ...holes];
+  const ys = rings.flatMap((r) => r.map((p) => p.y));
+  const min = Math.min(...ys),
+    max = Math.max(...ys);
+  let best: PointMm | null = null,
+    bestWidth = 0;
+  function spans(r: PointMm[], y: number) {
+    const hits: number[] = [];
+    for (let i = 0; i < r.length; i++) {
+      const a = r[i]!,
+        b = r[(i + 1) % r.length]!;
+      if (a.y > y !== b.y > y)
+        hits.push(a.x + ((b.x - a.x) * (y - a.y)) / (b.y - a.y));
+    }
+    hits.sort((a, b) => a - b);
+    const intervals: [number, number][] = [];
+    for (let i = 1; i < hits.length; i += 2)
+      intervals.push([hits[i - 1]!, hits[i]!]);
+    return intervals;
+  }
+  for (const fraction of [0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875]) {
+    const y = min + (max - min) * fraction;
+    let available = spans(outer, y);
+    for (const hole of holes)
+      for (const [l, r] of spans(hole, y))
+        available = available.flatMap(([a, b]) =>
+          r <= a || l >= b
+            ? [[a, b]]
+            : ([
+                [a, Math.min(l, b)],
+                [Math.max(r, a), b],
+              ].filter(([x, z]) => z! > x!) as [number, number][]),
+        );
+    for (const [a, b] of available)
+      if (b - a > bestWidth) {
+        bestWidth = b - a;
+        best = { x: (a + b) / 2, y };
+      }
+  }
+  return best;
 }

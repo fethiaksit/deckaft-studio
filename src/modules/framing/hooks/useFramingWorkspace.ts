@@ -27,7 +27,10 @@ import {
 } from "../operations";
 import type { FramingPlan, FramingLayer, FramingSettings } from "../model";
 export type FramingTool = "select" | "pan" | "add" | "move";
-export function useFramingWorkspace(projectId: string) {
+export function useFramingWorkspace(
+  projectId: string,
+  initialMemberId?: string,
+) {
   const repo = useRepository();
   const [project, setProject] = useState<Project | null>(null);
   const [drawing, setDrawing] = useState(emptyDrawing);
@@ -97,7 +100,12 @@ export function useFramingWorkspace(projectId: string) {
           setSettings(s);
           setSettingsDraft(null);
           setBaselineSettings(JSON.stringify(s));
-          setSelection(null);
+          const linked = f?.members.find((m) => m.id === initialMemberId);
+          setSelection(linked?.id ?? null);
+          if (linked) {
+            setVisibility((v) => ({ ...v, [linked.layer]: true }));
+            setPanel("profile");
+          }
           setAnchor(null);
           setError("");
           setSaved(false);
@@ -119,7 +127,7 @@ export function useFramingWorkspace(projectId: string) {
         active = false;
         mounted.current = false;
       };
-    }, [projectId, repo, retryCount]),
+    }, [projectId, repo, retryCount, initialMemberId]),
   );
   const settingsDirty =
     !!settingsDraft ||

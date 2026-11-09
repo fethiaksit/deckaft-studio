@@ -20,7 +20,8 @@ export function AreaSummary({
   return (
     <View
       style={{
-        padding: compact ? 10 : 14,
+        padding: compact ? 8 : 14,
+        ...(compact ? { height: 62, justifyContent: "center" as const } : {}),
         gap: 6,
         backgroundColor: colors.surface,
         borderRadius: compact ? 0 : 12,
@@ -36,7 +37,7 @@ export function AreaSummary({
         >
           Net {number(report.netM2)} m²
         </Label>
-        {compact && report.valid && (
+        {compact && report.grossM2 !== null && (
           <Label muted style={{ fontSize: 11 }}>
             Brüt {number(report.grossM2)} · Hariç {number(report.excludedM2)}
           </Label>
@@ -49,9 +50,20 @@ export function AreaSummary({
           <Label muted>Dış çevre: {number(report.perimeterM)} m</Label>
         </>
       )}
-      {!report.valid && (
-        <Label style={{ color: colors.danger, fontSize: 11, lineHeight: 16 }}>
-          {report.errors[0]} Kesin alan hesaplanmadı.
+      {(compact || !report.valid) && (
+        <Label
+          numberOfLines={compact ? 1 : undefined}
+          style={{
+            color: report.valid ? colors.muted : colors.danger,
+            fontSize: 11,
+            lineHeight: 16,
+          }}
+        >
+          {report.valid
+            ? "planState" in report && report.planState === "dimensioned"
+              ? "Ölçülendirilmiş Plan · Doğrulandı"
+              : "Taslak Kroki · Alan güncel"
+            : `${report.errors[0]} Kesin net alan bekliyor.`}
         </Label>
       )}
     </View>
