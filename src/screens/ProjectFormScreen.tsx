@@ -288,6 +288,14 @@ export default function ProjectFormScreen() {
                     router.push({ pathname: "/framing/[id]", params: { id } })
                   }
                 />
+                <Button
+                  title="Profil kesim planını aç"
+                  variant="secondary"
+                  disabled={busy || dirty}
+                  onPress={() =>
+                    router.push({ pathname: "/cutting/[id]", params: { id } })
+                  }
+                />
                 {dirty && (
                   <Label muted>
                     Çizimi açmadan önce proje bilgilerini kaydedin.

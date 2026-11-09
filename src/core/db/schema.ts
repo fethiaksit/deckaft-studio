@@ -28,3 +28,18 @@ CREATE TABLE IF NOT EXISTS framing_plans (
 PRAGMA user_version = 2;
 COMMIT;
 `;
+
+// Additive: projects, drawings and framing documents are preserved byte-for-byte.
+export const CUTTING_MIGRATION = `
+BEGIN IMMEDIATE;
+CREATE TABLE IF NOT EXISTS cutting_plans (
+ id TEXT PRIMARY KEY NOT NULL,
+ projectId TEXT UNIQUE NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+ sourcePlanId TEXT NOT NULL,
+ sourceRevision TEXT NOT NULL,
+ document TEXT NOT NULL,
+ createdAt TEXT NOT NULL
+);
+PRAGMA user_version = 3;
+COMMIT;
+`;
