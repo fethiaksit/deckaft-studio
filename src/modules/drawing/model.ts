@@ -1,3 +1,5 @@
+import { validateRing } from "../geometry/engine";
+import { checkConstraints, type EdgeConstraint } from "./constraints";
 import type { PointMm } from "../geometry/model";
 import { DRAWING } from "./config";
 export const voidKinds = [
@@ -18,6 +20,7 @@ export interface DrawingPath {
   role: PathRole;
   name: string;
   kind?: VoidKind;
+  constraints?: EdgeConstraint[];
 }
 export interface Dimension {
   id: string;
@@ -124,6 +127,16 @@ function record(value: unknown): Record<string, unknown> {
     throw new Error("Çizim verisi okunamadı.");
   return value as Record<string, unknown>;
 }
+export const samePoint = (a: PointMm, b: PointMm, tol = 1e-5) =>
+  Math.hypot(a.x - b.x, a.y - b.y) <= tol;
+export function withoutClosingDuplicate(
+  points: PointMm[],
+  tol = 1e-4,
+): PointMm[] {
+  return points.length > 1 && samePoint(points[0]!, points.at(-1)!, tol)
+    ? points.slice(0, -1)
+    : points;
+}
 export function parseDrawing(json: string): DrawingDocument {
   const raw = record(JSON.parse(json));
   if (
@@ -139,7 +152,7 @@ export function parseDrawing(json: string): DrawingDocument {
   )
     throw new Error("Çizim çok büyük.");
   const ids = new Set<string>();
-  const paths: DrawingPath[] = raw.paths.map((value, index) => {
+  let paths: DrawingPath[] = raw.paths.map((value, index) => {
     const p = record(value);
     if (
       typeof p.id !== "string" ||
@@ -159,10 +172,13 @@ export function parseDrawing(json: string): DrawingDocument {
       const first = points[0],
         last = points.at(-1);
       const closed =
-        points.length >= 4 && first?.x === last?.x && first?.y === last?.y;
+        points.length >= 4 &&
+        first !== undefined &&
+        last !== undefined &&
+        samePoint(first, last);
       return {
         id: p.id,
-        points: closed ? points.slice(0, -1) : points,
+        points: closed ? withoutClosingDuplicate(points) : points,
         closed,
         role: index === 0 ? "outer" : "draft",
         name: index === 0 ? "Dış alan" : `Çizgi ${index + 1}`,
@@ -176,14 +192,37 @@ export function parseDrawing(json: string): DrawingDocument {
       (p.role === "void" && !voidKinds.includes(p.kind as VoidKind))
     )
       throw new Error("Alan özellikleri okunamadı.");
-    return {
+    const unique = withoutClosingDuplicate(points);
+    const recover =
+      unique !== points &&
+      unique.length >= 3 &&
+      !validateRing({ points: unique, closed: true }).length;
+    const path: DrawingPath = {
       id: p.id,
-      points,
-      closed: p.closed,
+      points: recover ? unique : points,
+      closed: p.closed || recover,
       role: p.role as PathRole,
       name: p.name,
       ...(p.role === "void" ? { kind: p.kind as VoidKind } : {}),
     };
+    if (p.constraints !== undefined) {
+      if (!Array.isArray(p.constraints) || p.constraints.length > points.length)
+        throw Error("Kenar kısıtları okunamadı.");
+      path.constraints = p.constraints.map((v) => {
+        const c = record(v);
+        return {
+          index: c.index as number,
+          ...(c.axis !== undefined
+            ? { axis: c.axis as EdgeConstraint["axis"] }
+            : {}),
+          ...(c.lengthMm !== undefined
+            ? { lengthMm: c.lengthMm as number }
+            : {}),
+        };
+      });
+      checkConstraints(path);
+    }
+    return path;
   });
   const dimensions: Dimension[] = raw.dimensions.map((value) => {
     const m = record(value);
@@ -233,6 +272,31 @@ export function parseDrawing(json: string): DrawingDocument {
       throw new Error("Izgara aralığı geçersiz.");
     base.layers = layers as unknown as LayerSettings;
     base.snap = snap as unknown as SnapSettings;
+  }
+  if (paths.reduce((n, p) => n + p.points.length, 0) > DRAWING.maxPoints)
+    throw Error("Çizim çok büyük.");
+  const closedOuter = paths.find(
+    (p) => p.role === "outer" && p.closed && p.points.length >= 3,
+  );
+  if (!closedOuter) {
+    const closedDraftIndex = paths.findIndex(
+      (p) =>
+        p.role === "draft" &&
+        p.closed &&
+        p.points.length >= 3 &&
+        !validateRing({ points: p.points, closed: true }).length,
+    );
+    if (closedDraftIndex >= 0) {
+      paths = paths.map((p, idx) => {
+        if (p.role === "outer" && !p.closed) {
+          return { ...p, role: "draft" as PathRole, name: "Çizgi" };
+        }
+        if (idx === closedDraftIndex) {
+          return { ...p, role: "outer" as PathRole, name: "Dış alan" };
+        }
+        return p;
+      });
+    }
   }
   if (paths.filter((p) => p.role === "outer").length > 1)
     throw new Error("Çizimde yalnız bir dış sınır olabilir.");

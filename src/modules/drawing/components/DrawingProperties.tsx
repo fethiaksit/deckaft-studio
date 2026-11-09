@@ -88,7 +88,9 @@ export function DrawingProperties({
   const [x, setX] = useState("");
   const [y, setY] = useState("");
   const [edgeText, setEdgeText] = useState("");
-  const [unit, setUnit] = useState<"mm" | "cm" | "m">("m");
+  const [unit, setUnit] = useState<"mm" | "cm" | "m">("cm");
+  const [choices, setChoices] = useState<("start" | "end")[]>([]);
+  const [advanced, setAdvanced] = useState(false);
   const [fixed, setFixed] = useState<"start" | "end" | null>(null);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<VoidKind>("Ev");
@@ -107,6 +109,7 @@ export function DrawingProperties({
     s?.kind === "vertex" && path ? path.points[s.index] : null;
   useEffect(() => {
     setFixed(null);
+    setChoices([]);
   }, [
     s?.kind,
     s && s.kind !== "dimension" ? s.pathId : "",
@@ -114,7 +117,14 @@ export function DrawingProperties({
   ]);
   useEffect(() => {
     setEdgeText(edgeLength === null ? "" : String(edgeLength / factor));
-  }, [edgeLength, factor]);
+    setChoices([]);
+  }, [
+    edgeLength,
+    factor,
+    s?.kind,
+    s?.kind === "edge" ? s.pathId : null,
+    s?.kind === "edge" ? s.index : null,
+  ]);
   useEffect(() => {
     setX(selectedPoint ? String(selectedPoint.x) : "");
     setY(selectedPoint ? String(selectedPoint.y) : "");
@@ -126,6 +136,23 @@ export function DrawingProperties({
     () => setGrid(String(w.document.snap.gridMm)),
     [w.document.snap.gridMm],
   );
+  const lock =
+    s?.kind === "edge"
+      ? path?.constraints?.find((c) => c.index === s.index)
+      : undefined;
+  const lengthInput = /(?:mm|cm|m)\s*$/i.test(edgeText)
+    ? edgeText
+    : `${edgeText} ${unit}`;
+  const ends =
+    s?.kind === "edge" && path
+      ? [
+          { value: "start" as const, label: `Köşe ${s.index + 1} sabit` },
+          {
+            value: "end" as const,
+            label: `Köşe ${((s.index + 1) % path.points.length) + 1} sabit`,
+          },
+        ]
+      : [];
   const keyboard =
     Platform.OS === "ios" ? "numbers-and-punctuation" : "numeric";
   function applyCoordinate() {
@@ -150,6 +177,18 @@ export function DrawingProperties({
     >
       <View pointerEvents={w.saving ? "none" : "auto"} style={{ gap: 16 }}>
         <AreaSummary report={w.report} />
+        <Choice
+          items={[
+            { value: "sketch", label: "Basit Kroki" },
+            { value: "technical", label: "Hassas Teknik" },
+          ]}
+          value={w.mode}
+          onChange={(mode) => {
+            w.setMode(mode);
+            setChoices([]);
+            setFixed(null);
+          }}
+        />
         {w.error ? (
           <Label
             accessibilityRole="alert"
@@ -168,48 +207,110 @@ export function DrawingProperties({
               m
             </Label>
             <Label muted style={{ fontSize: 11 }}>
-              Yön korunur. Seçtiğiniz uç sabit kalır; diğer uç ve ona bağlı
-              komşu kenarlar güncellenir. Önceki ölçüler kilitlenmez.
+              Yalnız seçilen kenarın bir ucu taşınır. O köşeye bağlı komşu
+              kenarın boyu değişebilir.
             </Label>
             <Field
-              label="Yeni kenar uzunluğu"
+              label={`Yeni kenar uzunluğu (${unit})`}
               value={edgeText}
-              onChangeText={setEdgeText}
+              onChangeText={(value) => {
+                setEdgeText(value);
+                setChoices([]);
+              }}
               keyboardType={keyboard}
               placeholder="250 cm / 3,75 m / 1250 mm"
             />
             <Choice
-              items={(["mm", "cm", "m"] as const).map((v) => ({
-                value: v,
-                label: v,
+              items={(["mm", "cm", "m"] as const).map((value) => ({
+                value,
+                label: value,
               }))}
               value={unit}
               onChange={setUnit}
             />
-            <Choice
-              items={[
-                { value: "start", label: `Köşe ${s.index + 1} sabit` },
-                {
-                  value: "end",
-                  label: `Köşe ${((s.index + 1) % path!.points.length) + 1} sabit`,
-                },
-              ]}
-              value={fixed}
-              onChange={setFixed}
-            />
-            <Button
-              title="Gerçek geometriyi güncelle"
-              disabled={!fixed}
-              onPress={() =>
-                fixed &&
-                w.resize(
-                  /(?:mm|cm|m)\s*$/i.test(edgeText)
-                    ? edgeText
-                    : `${edgeText} ${unit}`,
-                  fixed,
-                )
-              }
-            />
+            {w.mode === "sketch" ? (
+              <>
+                <Button
+                  title="Uzunluğu uygula"
+                  onPress={() => setChoices(w.prepareResize(lengthInput))}
+                />
+                {choices.length > 1 && (
+                  <>
+                    <Label>İki uç da uygun. Hangi köşe sabit kalsın?</Label>
+                    <View style={{ gap: 6 }}>
+                      {ends.map((end) => (
+                        <Button
+                          key={end.value}
+                          title={end.label}
+                          variant="secondary"
+                          onPress={() => {
+                            w.resize(lengthInput, end.value);
+                            setChoices([]);
+                          }}
+                        />
+                      ))}
+                    </View>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                <Choice items={ends} value={fixed} onChange={setFixed} />
+                <Button
+                  title="Uzunluğu uygula"
+                  disabled={!fixed}
+                  onPress={() => fixed && w.resize(lengthInput, fixed)}
+                />
+                <Toggle
+                  label="Kenar boyunu kilitle"
+                  value={lock?.lengthMm !== undefined}
+                  onChange={(enabled) =>
+                    w.constrain(
+                      {
+                        axis: lock?.axis,
+                        lengthMm: enabled ? edgeLength : undefined,
+                      },
+                      fixed ?? undefined,
+                    )
+                  }
+                />
+                <Label muted>
+                  Yönü değiştirmek için sabit köşeyi seçin. Kısıtlar yalnız
+                  geçerli bir düzenleme kaydedildiğinde uygulanır.
+                </Label>
+                <Button
+                  title="Yatay kısıt"
+                  variant="secondary"
+                  disabled={!fixed}
+                  onPress={() =>
+                    fixed &&
+                    w.constrain(
+                      { axis: "horizontal", lengthMm: lock?.lengthMm },
+                      fixed,
+                    )
+                  }
+                />
+                <Button
+                  title="Dikey kısıt"
+                  variant="secondary"
+                  disabled={!fixed}
+                  onPress={() =>
+                    fixed &&
+                    w.constrain(
+                      { axis: "vertical", lengthMm: lock?.lengthMm },
+                      fixed,
+                    )
+                  }
+                />
+                {lock?.axis && (
+                  <Button
+                    title="Yön kısıtını kaldır"
+                    variant="secondary"
+                    onPress={() => w.constrain({ lengthMm: lock.lengthMm })}
+                  />
+                )}
+              </>
+            )}
           </Card>
         )}
         {s?.kind === "dimension" && (
@@ -227,51 +328,62 @@ export function DrawingProperties({
             </Label>
           </Card>
         )}
-        {(s?.kind === "vertex" ||
-          w.tool === "draw" ||
-          w.tool === "measure") && (
-          <Card style={{ padding: 12 }}>
-            <Label style={{ fontWeight: "600" }}>
-              {s?.kind === "vertex"
-                ? `Köşe ${s.index + 1} · Hassas taşıma`
-                : "Hassas nokta girişi"}
-            </Label>
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <View style={{ flex: 1 }}>
-                <Field
-                  label="X (mm)"
-                  value={x}
-                  onChangeText={setX}
-                  keyboardType={keyboard}
-                />
+        {w.mode === "technical" &&
+          (s?.kind === "vertex" ||
+            w.tool === "draw" ||
+            w.tool === "measure") && (
+            <Card style={{ padding: 12 }}>
+              <Label style={{ fontWeight: "600" }}>
+                {s?.kind === "vertex"
+                  ? `Köşe ${s.index + 1} · Hassas taşıma`
+                  : "Hassas nokta girişi"}
+              </Label>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    label="X (mm)"
+                    value={x}
+                    onChangeText={setX}
+                    keyboardType={keyboard}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    label="Y (mm)"
+                    value={y}
+                    onChangeText={setY}
+                    keyboardType={keyboard}
+                  />
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Field
-                  label="Y (mm)"
-                  value={y}
-                  onChangeText={setY}
-                  keyboardType={keyboard}
-                />
-              </View>
-            </View>
-            <Button
-              title={s?.kind === "vertex" ? "Köşeyi taşı" : "Nokta ekle"}
-              onPress={applyCoordinate}
-            />
-            {s?.kind === "vertex" && (
               <Button
-                title="Yakındaki köşeyle birleştir"
-                variant="secondary"
-                onPress={w.merge}
+                title={s?.kind === "vertex" ? "Köşeyi taşı" : "Nokta ekle"}
+                onPress={applyCoordinate}
               />
-            )}
-            <Label muted style={{ fontSize: 11 }}>
-              Elle girilen mm değerine yakalama uygulanmaz. Taşı aracıyla köşeyi
-              sürükleyebilirsiniz.
-            </Label>
-          </Card>
-        )}
-        {path && (
+              {s?.kind === "vertex" && (
+                <Button
+                  title="Yakındaki köşeyle birleştir"
+                  variant="secondary"
+                  onPress={w.merge}
+                />
+              )}
+              <Label muted style={{ fontSize: 11 }}>
+                Elle girilen mm değerine yakalama uygulanmaz. Taşı aracıyla
+                köşeyi sürükleyebilirsiniz.
+              </Label>
+            </Card>
+          )}
+        {path &&
+          !path.closed &&
+          path.role !== "void" &&
+          path.points.length >= 2 && (
+            <Button
+              title="Çizgileri Birleştir"
+              variant="secondary"
+              onPress={w.join}
+            />
+          )}
+        {path && (w.mode === "technical" || advanced) && (
           <Card style={{ padding: 12 }}>
             <Label style={{ fontSize: 11, color: colors.accent }}>
               {path.closed ? "KAPALI" : "AÇIK"} · {path.points.length} KÖŞE
@@ -345,7 +457,10 @@ export function DrawingProperties({
             disabled={
               !w.document.paths.some((p) => p.role === "outer" && p.closed)
             }
-            onPress={() => w.newRegion("void", newName.trim() || kind, kind)}
+            onPress={() => {
+              w.newRegion("void", newName.trim() || kind, kind);
+              w.setPanel(false);
+            }}
           />
           <Button
             title="Yeni serbest çizgi"
@@ -357,72 +472,85 @@ export function DrawingProperties({
             içinde olmalı.
           </Label>
         </Card>
-        <Card style={{ padding: 12 }}>
-          <Label style={{ fontWeight: "600" }}>Katmanlar</Label>
-          {(
-            [
-              { key: "outer", label: "Dış sınır ve serbest çizgiler" },
-              { key: "voids", label: "İç boşluklar" },
-              { key: "dimensions", label: "Ölçüler ve kenar etiketleri" },
-              { key: "grid", label: "Izgara ve yardımcı çizgiler" },
-            ] as const
-          ).map(({ key, label }) => (
-            <Toggle
-              key={key}
-              label={label}
-              value={w.document.layers[key]}
-              onChange={(value) =>
-                w.updateSettings({
-                  layers: { ...w.document.layers, [key]: value },
-                })
-              }
-            />
-          ))}
-          <Label muted style={{ fontSize: 11 }}>
-            Görünürlük hesabı değiştirmez.
-          </Label>
-        </Card>
-        <Card style={{ padding: 12 }}>
-          <Label style={{ fontWeight: "600" }}>Akıllı yakalama</Label>
-          {(
-            [
-              { key: "vertices", label: "Yakındaki köşeler" },
-              { key: "axes", label: "Yatay / dikey · 90°" },
-              { key: "grid", label: "Izgara noktaları" },
-            ] as const
-          ).map(({ key, label }) => (
-            <Toggle
-              key={key}
-              label={label}
-              value={w.document.snap[key]}
-              onChange={(value) =>
-                w.updateSettings({ snap: { ...w.document.snap, [key]: value } })
-              }
-            />
-          ))}
-          <Field
-            label="Yakalama ızgarası (mm)"
-            value={grid}
-            onChangeText={setGrid}
-            keyboardType={keyboard}
-          />
-          <Button
-            title="Izgara aralığını uygula"
-            variant="secondary"
-            onPress={() =>
-              w.updateSettings({
-                snap: {
-                  ...w.document.snap,
-                  gridMm: Number(grid.replace(",", ".")),
-                },
-              })
-            }
-          />
-          <Label muted style={{ fontSize: 11 }}>
-            Yakalama toleransı ekran ölçeğine göre 12 pikseldir. Görüntü
-            ızgarası okunabilirlik için aralığın katlarını gösterebilir.
-          </Label>
-        </Card>
+        <Button
+          title={
+            advanced ? "Gelişmiş seçenekleri gizle" : "Gelişmiş seçenekler"
+          }
+          variant="secondary"
+          onPress={() => setAdvanced((a) => !a)}
+        />
+        {(advanced || w.mode === "technical") && (
+          <>
+            <Card style={{ padding: 12 }}>
+              <Label style={{ fontWeight: "600" }}>Katmanlar</Label>
+              {(
+                [
+                  { key: "outer", label: "Dış sınır ve serbest çizgiler" },
+                  { key: "voids", label: "İç boşluklar" },
+                  { key: "dimensions", label: "Ölçüler ve kenar etiketleri" },
+                  { key: "grid", label: "Izgara ve yardımcı çizgiler" },
+                ] as const
+              ).map(({ key, label }) => (
+                <Toggle
+                  key={key}
+                  label={label}
+                  value={w.document.layers[key]}
+                  onChange={(value) =>
+                    w.updateSettings({
+                      layers: { ...w.document.layers, [key]: value },
+                    })
+                  }
+                />
+              ))}
+              <Label muted style={{ fontSize: 11 }}>
+                Görünürlük hesabı değiştirmez.
+              </Label>
+            </Card>
+            <Card style={{ padding: 12 }}>
+              <Label style={{ fontWeight: "600" }}>Akıllı yakalama</Label>
+              {(
+                [
+                  { key: "vertices", label: "Yakındaki köşeler" },
+                  { key: "axes", label: "Yatay / dikey · 90°" },
+                  { key: "grid", label: "Izgara noktaları" },
+                ] as const
+              ).map(({ key, label }) => (
+                <Toggle
+                  key={key}
+                  label={label}
+                  value={w.document.snap[key]}
+                  onChange={(value) =>
+                    w.updateSettings({
+                      snap: { ...w.document.snap, [key]: value },
+                    })
+                  }
+                />
+              ))}
+              <Field
+                label="Yakalama ızgarası (mm)"
+                value={grid}
+                onChangeText={setGrid}
+                keyboardType={keyboard}
+              />
+              <Button
+                title="Izgara aralığını uygula"
+                variant="secondary"
+                onPress={() =>
+                  w.updateSettings({
+                    snap: {
+                      ...w.document.snap,
+                      gridMm: Number(grid.replace(",", ".")),
+                    },
+                  })
+                }
+              />
+              <Label muted style={{ fontSize: 11 }}>
+                Yakalama toleransı ekran ölçeğine göre 12 pikseldir. Görüntü
+                ızgarası okunabilirlik için aralığın katlarını gösterebilir.
+              </Label>
+            </Card>
+          </>
+        )}
         <Label muted style={{ fontSize: 11 }}>
           Milimetre modeli · {w.project?.city} / {w.project?.district}
           Değişiklikleri Kaydet ile bu cihaza yazın.

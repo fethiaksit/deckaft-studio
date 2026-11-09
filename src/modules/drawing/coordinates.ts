@@ -15,6 +15,6 @@ export const screenToWorld = (p: PointMm, v: Viewport): PointMm => ({
 });
 export function zoomAt(v: Viewport, focal: PointMm, factor: number): Viewport {
   const point = screenToWorld(focal, v);
-  const scale = Math.min(2, Math.max(0.005, v.scale * factor));
+  const scale = Math.min(2, Math.max(1e-9, v.scale * factor));
   return { scale, x: focal.x - point.x * scale, y: focal.y - point.y * scale };
 }
